@@ -1,4 +1,5 @@
 import { SearchIcon } from "lucide-react";
+import { BlogCard } from "./BlogCard";
 
 import {
   InputGroup,
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/select";
 
 import { Button } from "@/components/ui/button";
+import { blogPosts } from "@/data/blogPost";
 
 function ArticleSection() {
   return (
@@ -61,12 +63,33 @@ function ArticleSection() {
           </div>
 
           <div className="flex max-lg:hidden gap-2">
-            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">Highlight</Button>
-            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">Cat</Button>
-            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">Inspiration</Button>
-            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">Ganeral</Button>
+            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">
+              Highlight
+            </Button>
+            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">
+              Cat
+            </Button>
+            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">
+              Inspiration
+            </Button>
+            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">
+              Ganeral
+            </Button>
           </div>
         </div>
+      </div>
+      <div className="px-3 py-3 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:px-20">
+        {blogPosts.map((post) => (
+          <BlogCard
+            key={post.id}
+            image={post.image}
+            category={post.category}
+            title={post.title}
+            description={post.description}
+            author={post.author}
+            date={post.date}
+          />
+        ))}
       </div>
     </>
   );
