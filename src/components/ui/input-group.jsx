@@ -3,7 +3,7 @@ import { cva } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const inputGroupVariants = cva(
-  "flex items-center border border-input bg-background rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+  "flex items-center border border-input bg-white rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
   {
     variants: {
       variant: {

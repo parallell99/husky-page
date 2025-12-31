@@ -18,6 +18,9 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { blogPosts } from "@/data/blogPost";
+import { selectData } from "@/data/select";
+
+
 
 function ArticleSection() {
   return (
@@ -25,7 +28,7 @@ function ArticleSection() {
       <div className=" my-10 lg:mx-20">
         <p className="text-2xl font-semibold pl-3 py-4">Latest articles</p>
         <div className="flex flex-col justify-center items-center w-full py-10 bg-brown-200 lg:flex-row-reverse lg:h-[80px] lg:rounded-2xl lg:px-5">
-          <div className="grid w-[343px] max-w-sm lg:w-[560px] bg-white">
+          <div className="grid w-full px-5 lg:w-[560px]">
             <InputGroup>
               <InputGroupInput
                 placeholder="Search"
@@ -41,40 +44,34 @@ function ArticleSection() {
               Category
             </p>
           </div>
-          <div className="lg:hidden bg-white">
+          <div className="lg:hidden  w-full px-5">
             <Select>
-              <SelectTrigger className="w-[343px]">
+              <SelectTrigger className="w-full">
                 <SelectValue
                   placeholder="Highlight"
-                  className="text-sm font-bold text-brown-400"
+                  className="text-sm font-medium text-brown-400"
                 />
               </SelectTrigger>
               <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>Fruits</SelectLabel>
-                  <SelectItem value="apple">Apple</SelectItem>
-                  <SelectItem value="banana">Banana</SelectItem>
-                  <SelectItem value="blueberry">Blueberry</SelectItem>
-                  <SelectItem value="grapes">Grapes</SelectItem>
-                  <SelectItem value="pineapple">Pineapple</SelectItem>
-                </SelectGroup>
+                {selectData.map((item, index) => (
+                  <SelectGroup key={index}>
+                    <SelectLabel>{item}</SelectLabel>
+                  </SelectGroup>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="flex max-lg:hidden gap-2">
-            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">
-              Highlight
-            </Button>
-            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">
-              Cat
-            </Button>
-            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">
-              Inspiration
-            </Button>
-            <Button className="hover:bg-brown-300 text-brown-500 cursor-pointer">
-              Ganeral
-            </Button>
+            {selectData.map((item, index) => (
+              <Button
+                key={index}
+                className="hover:bg-brown-300 text-brown-500 cursor-pointer"
+              >
+                {item}
+              </Button>
+            ))}
+
           </div>
         </div>
       </div>
