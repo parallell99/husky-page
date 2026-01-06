@@ -1,6 +1,6 @@
 import logo1 from "../assets/image/Github_black.svg";
 import logo2 from "../assets/image/Google_black.svg";
-import logo3 from "../assets/image/Linkedin_black.svg";
+import logo3 from "../assets/image/LinkedIN_black.svg";
 
 function Footer() {
   return (
