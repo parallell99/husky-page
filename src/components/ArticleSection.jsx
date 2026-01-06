@@ -27,7 +27,7 @@ function ArticleSection() {
     <>
       <div className=" my-10 lg:mx-20">
         <p className="text-2xl font-semibold pl-3 py-4">Latest articles</p>
-        <div className="flex flex-col justify-center items-center w-full py-10 bg-brown-200 lg:flex-row-reverse lg:h-[80px] lg:rounded-2xl lg:px-5">
+        <div className="flex flex-col justify-center items-center w-full py-10  bg-brown-200 lg:flex-row-reverse lg:h-[80px] lg:rounded-2xl lg:px-5">
           <div className="grid w-full px-5 lg:w-[560px]">
             <InputGroup>
               <InputGroupInput
