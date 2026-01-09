@@ -1,7 +1,7 @@
 import heroImage from "../assets/image/section.jpg";
 function Hero() {
   return (
-    <section className="flex flex-col items-center justify-center gap-5 px-3 lg:flex-row  lg:py-15 lg:px-20  lg:gap-10">
+    <section className="flex flex-col items-center justify-center gap-5 px-3 lg:flex-row  lg:py-15 lg:px-20 mt-[50px]  lg:gap-10">
       <div className="flex flex-col items-center justify-center lg:hidden">
         <h1 className="text-4xl  py-5 text-center font-bold leading-10 ">
           Stay Informed, Stay Inspired

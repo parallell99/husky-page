@@ -9,9 +9,7 @@ import {
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -20,9 +18,11 @@ import { Button } from "@/components/ui/button";
 import { blogPosts } from "@/data/blogPost";
 import { selectData } from "@/data/select";
 
-
+import { useState } from "react";
 
 function ArticleSection() {
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [search, setSearch] = useState("");
   return (
     <>
       <div className=" my-10 lg:mx-20">
@@ -33,6 +33,8 @@ function ArticleSection() {
               <InputGroupInput
                 placeholder="Search"
                 className="text-sm font-medium text-brown-600 w-full"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
               <InputGroupAddon>
                 <SearchIcon />
@@ -45,18 +47,23 @@ function ArticleSection() {
             </p>
           </div>
           <div className="lg:hidden  w-full px-5">
-            <Select>
+            <Select
+              value={selectedCategory === "All" ? "Highlight" : selectedCategory}
+              onValueChange={(value) =>
+                setSelectedCategory(value === "Highlight" ? "All" : value)
+              }
+            >
               <SelectTrigger className="w-full">
                 <SelectValue
                   placeholder="Highlight"
-                  className="text-sm font-medium text-brown-400"
+                  className="text-sm font-medium"
                 />
               </SelectTrigger>
               <SelectContent>
                 {selectData.map((item, index) => (
-                  <SelectGroup key={index}>
-                    <SelectLabel>{item}</SelectLabel>
-                  </SelectGroup>
+                  <SelectItem key={index} value={item}>
+                    {item}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -66,27 +73,50 @@ function ArticleSection() {
             {selectData.map((item, index) => (
               <Button
                 key={index}
-                className="hover:bg-brown-300 text-brown-500 cursor-pointer"
+                className={`hover:bg-brown-300 text-brown-500 cursor-pointer ${
+                  selectedCategory === item ||
+                  (item === "Highlight" && selectedCategory === "All")
+                    ? "bg-brown-300"
+                    : ""
+                }`}
+                onClick={() =>
+                  setSelectedCategory(item === "Highlight" ? "All" : item)
+                }
               >
                 {item}
               </Button>
             ))}
-
           </div>
         </div>
       </div>
       <div className="px-3 py-3 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:px-20">
-        {blogPosts.map((post) => (
-          <BlogCard
-            key={post.id}
-            image={post.image}
-            category={post.category}
-            title={post.title}
-            description={post.description}
-            author={post.author}
-            date={post.date}
-          />
-        ))}
+        {blogPosts
+          .filter((post) => {
+            // Filter by category
+            const matchesCategory =
+              selectedCategory === "All" || post.category === selectedCategory;
+
+            // Filter by search term
+            const searchLower = search.toLowerCase();
+            const matchesSearch =
+              search === "" ||
+              post.title.toLowerCase().includes(searchLower) ||
+              post.description.toLowerCase().includes(searchLower) ||
+              post.author.toLowerCase().includes(searchLower) ||
+              post.category.toLowerCase().includes(searchLower);
+            return matchesCategory && matchesSearch;
+          })
+          .map((post) => (
+            <BlogCard
+              key={post.id}
+              image={post.image}
+              category={post.category}
+              title={post.title}
+              description={post.description}
+              author={post.author}
+              date={post.date}
+            />
+          ))}
       </div>
     </>
   );
