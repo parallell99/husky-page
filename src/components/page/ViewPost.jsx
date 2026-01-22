@@ -17,6 +17,8 @@ function CardDetail() {
     const [comment, setComment] = useState("");
     const [comments, setComments] = useState([]);
     const { copyToClipboard, isCopied } = useCopyToClipboard();
+    const [showLoginModal, setShowLoginModal] = useState(false);
+    const [showAccountPrompt, setShowAccountPrompt] = useState(false);
 
     const handleCopyLink = () => {
         const currentUrl = window.location.href;
@@ -136,30 +138,32 @@ function CardDetail() {
     return (
         <>
             <Navbar />
-            
-            <div className="flex flex-col items-center justify-center w-full mt-10 lg:mt-20 ">
-                <div className=" w-85 rounded-2xl  py-10 lg:w-180 ">
-                    <div className="flex flex-col gap-6">
-                        {/* Image */}
-                        <div className="relative h-[212px] sm:h-[360px] lg:h-[500px]">
+            {/* Image */}
+            <div className="h-[212px] w-full sm:h-[360px] lg:h-[500px] lg:w-[1200px] mx-auto mt-12 lg:mt-30  relative ">
                             <img
-                                className="w-full h-full object-cover rounded-md"
+                                className="w-full h-full lg:rounded-2xl object-cover "
                                 src={post.image}
                                 alt={post.title}
                             />
                         </div>
-
-                        {/* Category */}
-                        <div className="flex">
+            
+            <div className="flex flex-col lg:grid lg:grid-cols-[1fr_280px] items-start w-full mt-10 lg:mt-20 px-4 lg:px-30 gap-6">
+                <div className="w-85 rounded-2xl pb-5 lg:w-full">
+                    <div className="flex flex-col gap-6">
+                        {/* Category and Date */}
+                        <div className="flex items-center gap-3">
                             <span className="bg-green-200 rounded-full px-3 py-1 text-sm font-semibold text-green-600">
                                 {post.category}
                             </span>
+                            {post.date && (
+                                <span className="text-sm text-brown-500">
+                                    {post.date}
+                                </span>
+                            )}
                         </div>
 
                         {/* Title */}
                         <h1 className="text-3xl lg:text-4xl font-bold">{post.title}</h1>
-
-
 
                         {/* Description */}
                         <p className="text-lg text-brown-600">{post.description}</p>
@@ -170,8 +174,11 @@ function CardDetail() {
                                 {formatContent(post.content)}
                             </div>
                         )}
-                        {/* Author and Date */}
-                        <div className="hidden lg:flex flex-col text-sm bg-brown-200 rounded-2xl p-5 py-10 fixed top-30 right-8 w-64 z-30">
+                    </div>
+                </div>
+                
+                {/* Author */}
+                <div className=" lg:flex flex-col mb-10 text-sm bg-brown-200 rounded-2xl p-5 py-10 mx-auto lg:sticky lg:top-30 lg:self-start lg:w-64 lg:z-30">
                             <div className="flex justify-start">
                                 <img
                                     className="w-8 h-8 rounded-full mr-2"
@@ -191,15 +198,16 @@ function CardDetail() {
                                 When i’m not writing, I spends time volunteering at my local animal shelter, helping cats find loving homes.</p>
 
 
-                        </div>
-
-
-                    </div>
                 </div>
             </div>
             
-            <div className="flex flex-col gap-5 py-5 items-center  bg-brown-200 lg:w-180 lg:flex-row lg:mx-auto">
-                <p className="text-sm text-brown-600 bg-white border w-85 h-12 rounded-4xl flex items-center justify-center">🙂{post.like || post.likes || 0}</p>
+            <div className="flex flex-col gap-5 py-5 items-center justify-center  bg-brown-200 lg:w-195 lg:flex-row lg:ml-30 lg:rounded-2xl ">
+                <p 
+                    className="text-sm text-brown-600 bg-white border w-85 h-12 rounded-4xl flex items-center justify-center cursor-pointer hover:bg-brown-100 transition-colors"
+                    onClick={() => setShowAccountPrompt(!showAccountPrompt)}
+                >
+                    🙂{post.like || post.likes || 0}
+                </p>
                 <div className="flex gap-3">
                 <span 
                     className="bg-white w-40 h-12 border rounded-4xl flex items-center justify-center cursor-pointer hover:bg-brown-100 transition-colors"
@@ -227,7 +235,7 @@ function CardDetail() {
                 />
                 </div>
             </div>
-            <div className="flex flex-col items-center justify-center py-10 ">
+            <div className="flex flex-col items-center lg:items-start py-10 px-4 lg:px-30">
                 <div className="w-85 lg:w-180">
                     <h2 className="text-xl font-semibold mb-6">Comment</h2>
                     
@@ -288,7 +296,23 @@ function CardDetail() {
                 </div>
             </div>
 
-             <Footer />                     
+            {showAccountPrompt && (
+                <div className="fixed inset-0 flex items-center justify-center z-50">
+                    <div className="bg-brown-200 rounded-2xl p-8 flex flex-col items-center gap-4 w-85 lg:w-96">
+                        <div className="text-center text-lg font-semibold">Create an account to continue</div>
+                        <Link to="/signup" className="bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 px-6 hover:bg-brown-700 transition-colors">Create account</Link>
+                        <p className="text-center text-xs ">Already have an account? <Link to="/login" className="text-brown-600 underline">Login</Link></p>
+                        <button 
+                            onClick={() => setShowAccountPrompt(false)}
+                            className="text-brown-500 text-xs mt-2 hover:text-brown-700"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <Footer />                     
         </>
     );
 }
