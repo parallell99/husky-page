@@ -2,11 +2,13 @@ import Navbar from "../Navbar";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import success from "../../assets/image/Frame_427321234.svg";
+import { Eye, EyeOff } from "lucide-react";
 function Signup() {
     const [name, setName] = useState("");
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [errors, setErrors] = useState({
         name: "",
         username: "",
@@ -141,19 +143,28 @@ function Signup() {
 
                             <div className="flex flex-col gap-2 pt-5">
                                 <label htmlFor="password" className="text-sm font-medium text-brown-400">Password</label>
-                                <input
-                                    type="password"
-                                    placeholder="Password"
-                                    className={`w-full p-2 rounded-md border text-xs bg-white ${errors.password ? 'border-red-500 text-red-500' : 'border-brown-300 text-brown-400'
-                                        }`}
-                                    value={password}
-                                    onChange={(e) => {
-                                        setPassword(e.target.value);
-                                        if (errors.password) {
-                                            setErrors({ ...errors, password: "" });
-                                        }
-                                    }}
-                                />
+                                <div className="relative">
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+                                        placeholder="Password"
+                                        className={`w-full p-2 pr-10 rounded-md border text-xs bg-white ${errors.password ? 'border-red-500 text-red-500' : 'border-brown-300 text-brown-400'
+                                            }`}
+                                        value={password}
+                                        onChange={(e) => {
+                                            setPassword(e.target.value);
+                                            if (errors.password) {
+                                                setErrors({ ...errors, password: "" });
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-brown-400 hover:text-brown-600"
+                                    >
+                                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </button>
+                                </div>
                                 {errors.password && <p className="text-xs text-red-500">{errors.password}</p>}
                             </div>
 
