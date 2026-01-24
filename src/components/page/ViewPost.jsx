@@ -139,7 +139,7 @@ function CardDetail() {
         <>
             <Navbar />
             {/* Image */}
-            <div className="h-[212px] w-full sm:h-[360px] lg:h-[500px] lg:w-[1200px] mx-auto mt-12 lg:mt-30  relative ">
+            <div className=" h-[212px] w-full sm:h-[360px] lg:h-[500px] lg:w-full lg:px-30 mx-auto mt-12 lg:mt-30  relative ">
                             <img
                                 className="w-full h-full lg:rounded-2xl object-cover "
                                 src={post.image}
@@ -148,8 +148,8 @@ function CardDetail() {
                         </div>
             
             <div className="flex flex-col lg:grid lg:grid-cols-[1fr_280px] items-start w-full mt-10 lg:mt-20 px-4 lg:px-30 gap-6">
-                <div className="w-85 rounded-2xl pb-5 lg:w-full">
-                    <div className="flex flex-col gap-6">
+                <div className=" rounded-2xl pb-5 lg:w-full">
+                    <div className="flex flex-col gap-6 ">
                         {/* Category and Date */}
                         <div className="flex items-center gap-3">
                             <span className="bg-green-200 rounded-full px-3 py-1 text-sm font-semibold text-green-600">
