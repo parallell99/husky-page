@@ -9,6 +9,7 @@ import CategoryManagement from './components/page/CategoryManagement.jsx'
 import CreateCategory from './components/page/CreateCategory.jsx'
 import Profile from './components/page/Profile.jsx'
 import Notification from './components/page/Notification.jsx'
+import ResetPassword from './components/page/ResetPassword.jsx'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import ViewPost from './components/page/ViewPost.jsx'
 import './App.css'
@@ -35,6 +36,7 @@ function App() {
         <Route path="/dashboard/categories/edit/:id" element={<CreateCategory />} />
         <Route path="/dashboard/profile" element={<Profile />} />
         <Route path="/dashboard/notification" element={<Notification />} />
+        <Route path="/dashboard/reset-password" element={<ResetPassword />} />
       </Routes>
     </Router>
     </>

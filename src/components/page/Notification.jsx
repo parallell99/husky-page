@@ -18,7 +18,7 @@ function Notification() {
     { icon: FolderOpen, label: "Category Management", active: false, path: "/dashboard/categories" },
     { icon: User, label: "Profile", active: false, path: "/dashboard/profile" },
     { icon: Bell, label: "Notification", active: true, path: "/dashboard/notification" },
-    { icon: KeyRound, label: "Reset Password", active: false, path: "/dashboard" },
+    { icon: KeyRound, label: "Reset Password", active: false, path: "/dashboard/reset-password" },
     { icon: LogOut, label: "Logout", active: false, path: "/dashboard" },
   ];
 
