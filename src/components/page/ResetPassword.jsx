@@ -131,7 +131,7 @@ function ResetPassword() {
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-brown-100">
-        <div className="p-8 max-w-4xl mx-auto">
+        <div className="p-8 w-full mx-auto">
           {/* Profile Card */}
           <div className="bg-white rounded-xl shadow-sm border border-brown-300 p-6">
             {/* Header with Reset Button */}

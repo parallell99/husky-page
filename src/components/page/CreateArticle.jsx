@@ -44,7 +44,28 @@ function CreateArticle() {
   // Load article data if editing
   useEffect(() => {
     if (isEditMode && articleId) {
-      const existingArticle = getArticleById(articleId);
+      // First try to get from localStorage
+      let existingArticle = getArticleById(articleId);
+      
+      // If not found in localStorage, check fallback data
+      if (!existingArticle) {
+        const fallbackArticle = fallbackPosts.find((p) => p.id === parseInt(articleId));
+        if (fallbackArticle) {
+          // Convert fallback post to article format
+          existingArticle = {
+            id: fallbackArticle.id,
+            thumbnail: fallbackArticle.image || null,
+            category: fallbackArticle.category || "",
+            author: fallbackArticle.author || "Admin User",
+            title: fallbackArticle.title || "",
+            introduction: fallbackArticle.description || "",
+            content: fallbackArticle.content || "",
+            status: "Published", // Default status for fallback articles
+            thumbnailPreview: fallbackArticle.image || null,
+          };
+        }
+      }
+      
       if (existingArticle) {
         setFormData({
           thumbnail: existingArticle.thumbnail || null,
@@ -67,8 +88,8 @@ function CreateArticle() {
 
   const menuItems = [
     { icon: FileText, label: "Article Management", active: false, path: "/dashboard" },
-    { icon: FolderOpen, label: "Category Management", active: false, path: "/dashboard" },
-    { icon: User, label: "Profile", active: false, path: "/dashboard" },
+    { icon: FolderOpen, label: "Category Management", active: false, path: "/dashboard/categories" },
+    { icon: User, label: "Profile", active: false, path: "/dashboard/profile" },
     { icon: Bell, label: "Notification", active: false, path: "/dashboard/notification" },
     { icon: KeyRound, label: "Reset Password", active: false, path: "/dashboard/reset-password" },
     { icon: LogOut, label: "Logout", active: false, path: "/dashboard" },

@@ -88,6 +88,19 @@ function CardDetail() {
         }
     }, [id]);
 
+    // Scroll to comment section when hash is present
+    useEffect(() => {
+        if (window.location.hash === "#comments" && !loading) {
+            // Wait a bit for content to render, then scroll
+            setTimeout(() => {
+                const commentSection = document.getElementById("comments");
+                if (commentSection) {
+                    commentSection.scrollIntoView({ behavior: "smooth", block: "start" });
+                }
+            }, 300);
+        }
+    }, [loading, id]);
+
     
 
     if (loading) {
@@ -236,7 +249,7 @@ function CardDetail() {
                 </div>
             </div>
             <div className="flex flex-col items-center lg:items-start py-10 px-4 lg:px-30">
-                <div className="w-85 lg:w-180">
+                <div className="w-85 lg:w-180" id="comments">
                     <h2 className="text-xl font-semibold mb-6">Comment</h2>
                     
                     {/* Comment Input */}
