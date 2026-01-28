@@ -201,7 +201,7 @@ function Notification() {
                       <p className="text-sm font-medium text-brown-600">
                         {notification.text}
                       </p>
-                      <p className="text-xs text-brown-400 mt-1">
+                      <p className="text-xs text-orange mt-1">
                         {getRelativeTime(notification.hoursAgo)}
                       </p>
                     </div>

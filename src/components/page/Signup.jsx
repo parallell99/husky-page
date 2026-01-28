@@ -78,7 +78,7 @@ function Signup() {
                         <img src={success} alt="success" className="w-20 h-20" />
                         <p className="text-xl font-semibold text-center pb-5">Registration success</p>
                         <div className="flex justify-center">
-                            <button className="w-30 bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 ">Continue</button>
+                            <Link to="/" className="w-30 bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 px-6 flex items-center justify-center">Continue</Link>
                         </div>
                     </div>
                 </div>

@@ -2,6 +2,7 @@ import Home from './components/page/Home.jsx'
 import Login from './components/page/Login.jsx'
 import Signup from './components/page/Signup.jsx'
 import MemberPage from './components/page/MemberPage.jsx'
+import MemberResetPassword from './components/page/MemberResetPassword.jsx'
 import AdminLogin from './components/page/AdminLogin.jsx'
 import Dashboard from './components/page/Dashborad.jsx'
 import CreateArticle from './components/page/CreateArticle.jsx'
@@ -27,6 +28,7 @@ function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/post/:id" element={<ViewPost />} />
         <Route path="/member" element={<MemberPage />} />
+        <Route path="/member/reset-password" element={<MemberResetPassword />} />
         <Route path="/admin-login" element={<AdminLogin />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/dashboard/create" element={<CreateArticle />} />

@@ -1,11 +1,12 @@
 import Navbar from "../Navbar";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 
 
 
 function Login() {
+    const navigate = useNavigate();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
@@ -43,8 +44,27 @@ function Login() {
 
         // If no errors, proceed with login
         if (!newErrors.email && !newErrors.password) {
-            console.log(email, password);
-            // Here you would typically send the data to your backend
+            // Set login status in localStorage
+            localStorage.setItem("isLoggedIn", "true");
+            
+            // Initialize user profile if it doesn't exist
+            const existingProfile = localStorage.getItem("user_profile");
+            if (!existingProfile) {
+                const defaultProfile = {
+                    name: "Moodeng ja",
+                    username: email.split("@")[0],
+                    email: email,
+                    bio: "",
+                    profileImage: null,
+                };
+                localStorage.setItem("user_profile", JSON.stringify(defaultProfile));
+            }
+            
+            // Trigger custom event for Navbar to update
+            window.dispatchEvent(new Event("loginChange"));
+            
+            // Navigate to home page
+            navigate("/");
         }
     }
 
