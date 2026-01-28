@@ -9,6 +9,9 @@ function Navbar() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const dropdownRef = useRef(null);
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const notificationDropdownRef = useRef(null);
 
   // Check login status from localStorage
   useEffect(() => {
@@ -52,22 +55,50 @@ function Navbar() {
     };
   }, []);
 
+  // Load notifications on mount
+  useEffect(() => {
+    setNotifications(loadNotifications());
+  }, []);
+
+  // Listen for notification updates
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === "notifications") {
+        setNotifications(loadNotifications());
+      }
+    };
+    const handleNotificationUpdate = () => {
+      setNotifications(loadNotifications());
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("notificationUpdate", handleNotificationUpdate);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("notificationUpdate", handleNotificationUpdate);
+    };
+  }, []);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
       }
+      if (notificationDropdownRef.current && !notificationDropdownRef.current.contains(event.target)) {
+        setShowNotificationDropdown(false);
+      }
     };
 
-    if (showDropdown) {
+    if (showDropdown || showNotificationDropdown) {
       document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showDropdown]);
+  }, [showDropdown, showNotificationDropdown]);
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
@@ -96,6 +127,95 @@ function Navbar() {
     return null;
   };
 
+  // Notification helper functions
+  const getDefaultNotifications = () => {
+    return [
+      {
+        id: 1,
+        avatar: null,
+        text: "User commented on your article 'The Art of Mindfulness'",
+        hoursAgo: 2,
+        postId: 1,
+      },
+      {
+        id: 2,
+        avatar: null,
+        text: "New follower: John Doe started following you",
+        hoursAgo: 4,
+        postId: null,
+      },
+      {
+        id: 3,
+        avatar: null,
+        text: "Your article 'Cat Nutrition Guide' was published",
+        hoursAgo: 6,
+        postId: 2,
+      },
+      {
+        id: 4,
+        avatar: null,
+        text: "User liked your article 'The Power of Habits'",
+        hoursAgo: 12,
+        postId: 3,
+      },
+      {
+        id: 5,
+        avatar: null,
+        text: "Comment reply: Sarah replied to your comment",
+        hoursAgo: 18,
+        postId: 1,
+      },
+      {
+        id: 6,
+        avatar: null,
+        text: "Your draft 'Future of Work' was auto-saved",
+        hoursAgo: 24,
+        postId: null,
+      },
+    ];
+  };
+
+  const loadNotifications = () => {
+    const storedNotifications = localStorage.getItem("notifications");
+    if (storedNotifications) {
+      try {
+        return JSON.parse(storedNotifications);
+      } catch (error) {
+        console.error("Error loading notifications:", error);
+        return getDefaultNotifications();
+      }
+    }
+    return getDefaultNotifications();
+  };
+
+  const getNotificationCountDisplay = () => {
+    const count = notifications.length;
+    if (count <= 0) return null;
+    if (count > 99) return "99+";
+    return count.toString();
+  };
+
+  const getRelativeTime = (hoursAgo) => {
+    if (hoursAgo < 1) {
+      return "Just now";
+    } else if (hoursAgo === 1) {
+      return "1 hour ago";
+    } else if (hoursAgo < 24) {
+      return `${hoursAgo} hours ago`;
+    } else {
+      const daysAgo = Math.floor(hoursAgo / 24);
+      return daysAgo === 1 ? "1 day ago" : `${daysAgo} days ago`;
+    }
+  };
+
+  const handleNotificationClick = (notification) => {
+    setShowNotificationDropdown(false);
+    setIsOpen(false);
+    if (notification.postId) {
+      navigate(`/post/${notification.postId}#comments`);
+    }
+  };
+
   return (
     <nav className="fixed top-0 left-0 right-0 bg-brown-100 border-b border-brown-300 px-6 w-full h-[48px] lg:h-[80px] lg:px-20 z-40">
       <div className=" mx-auto flex justify-between items-center h-full">
@@ -109,14 +229,67 @@ function Navbar() {
         {/* Desktop Menu - Conditional Rendering */}
         {isLoggedIn ? (
           <div className="hidden lg:flex gap-4 items-center">
-            {/* Notification Icon */}
-            <Link to="/dashboard/notification" className="relative">
-              <button className="p-2 text-brown-600 hover:text-brown-800 transition-colors">
+            {/* Notification Icon with Dropdown */}
+            <div className="relative" ref={notificationDropdownRef}>
+              <button
+                onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors "
+              >
                 <Bell size={20} />
+                {/* Notification count badge */}
+                {notifications.length > 0 && (
+                  <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
+                    {getNotificationCountDisplay()}
+                  </span>
+                )}
               </button>
-              {/* Red notification badge */}
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </Link>
+
+              {/* Notification Dropdown */}
+              {showNotificationDropdown && (
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-6 text-center">
+                      <span className="text-sm text-brown-400">No notifications</span>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-brown-200">
+                      {notifications.map((notification) => (
+                        <button
+                          key={notification.id}
+                          onClick={() => handleNotificationClick(notification)}
+                          className="w-full text-left px-4 py-3 hover:bg-brown-50 transition-colors flex items-start gap-3"
+                        >
+                          {/* Avatar */}
+                          <div className="shrink-0">
+                            {notification.avatar ? (
+                              <img
+                                src={notification.avatar}
+                                alt="User"
+                                className="w-10 h-10 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
+                                <User className="w-6 h-6 text-brown-400" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Notification Content */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-brown-600">
+                              {notification.text}
+                            </p>
+                            <p className="text-xs text-orange mt-1">
+                              {getRelativeTime(notification.hoursAgo)}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* User Profile Section */}
             <div className="relative" ref={dropdownRef}>
@@ -198,13 +371,66 @@ function Navbar() {
         <div className="lg:hidden flex items-center gap-2">
           {/* Notification Icon - Mobile */}
           {isLoggedIn && (
-            <Link to="/dashboard/notification" className="relative">
-              <button className="max-lg:hidden p-2 text-brown-600 hover:text-brown-800 transition-colors">
+            <div className="relative" ref={notificationDropdownRef}>
+              <button
+                onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors max-lg:hidden"
+              >
                 <Bell size={18} />
+                {/* Notification count badge */}
+                {notifications.length > 0 && (
+                  <span className="absolute top-0 right-0 min-w-[16px] h-[16px] bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center px-0.5">
+                    {getNotificationCountDisplay()}
+                  </span>
+                )}
               </button>
-              {/* Red notification badge */}
-              <span className="max-lg:hidden absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full"></span>
-            </Link>
+
+              {/* Notification Dropdown - Mobile */}
+              {showNotificationDropdown && (
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-6 text-center">
+                      <span className="text-sm text-brown-400">No notifications</span>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-brown-200">
+                      {notifications.map((notification) => (
+                        <button
+                          key={notification.id}
+                          onClick={() => handleNotificationClick(notification)}
+                          className="w-full text-left px-4 py-3 hover:bg-brown-50 transition-colors flex items-start gap-3"
+                        >
+                          {/* Avatar */}
+                          <div className="shrink-0">
+                            {notification.avatar ? (
+                              <img
+                                src={notification.avatar}
+                                alt="User"
+                                className="w-10 h-10 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
+                                <User className="w-6 h-6 text-brown-400" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Notification Content */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-brown-600">
+                              {notification.text}
+                            </p>
+                            <p className="text-xs text-orange mt-1">
+                              {getRelativeTime(notification.hoursAgo)}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           
           {/* Hamburger Menu */}
@@ -251,17 +477,66 @@ function Navbar() {
                       </div>
                       
                       {/* Notification Bell */}
-                      <Link 
-                        to="/dashboard/notification" 
-                        onClick={() => setIsOpen(false)}
-                        className="relative"
-                      >
-                        <button className="p-2 text-brown-600 hover:text-brown-800 transition-colors">
+                      <div className="relative" ref={notificationDropdownRef}>
+                        <button
+                          onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                          className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors"
+                        >
                           <Bell size={20} />
+                          {/* Notification count badge */}
+                          {notifications.length > 0 && (
+                            <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
+                              {getNotificationCountDisplay()}
+                            </span>
+                          )}
                         </button>
-                        {/* Red notification badge */}
-                        <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                      </Link>
+
+                        {/* Notification Dropdown - Mobile Hamburger Menu */}
+                        {showNotificationDropdown && (
+                          <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
+                            {notifications.length === 0 ? (
+                              <div className="px-4 py-6 text-center">
+                                <span className="text-sm text-brown-400">No notifications</span>
+                              </div>
+                            ) : (
+                              <div className="divide-y divide-brown-200">
+                                {notifications.map((notification) => (
+                                  <button
+                                    key={notification.id}
+                                    onClick={() => handleNotificationClick(notification)}
+                                    className="w-full text-left px-4 py-3 hover:bg-brown-50 transition-colors flex items-start gap-3"
+                                  >
+                                    {/* Avatar */}
+                                    <div className="shrink-0">
+                                      {notification.avatar ? (
+                                        <img
+                                          src={notification.avatar}
+                                          alt="User"
+                                          className="w-10 h-10 rounded-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="w-10 h-10 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
+                                          <User className="w-6 h-6 text-brown-400" />
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Notification Content */}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-brown-600">
+                                        {notification.text}
+                                      </p>
+                                      <p className="text-xs text-orange mt-1">
+                                        {getRelativeTime(notification.hoursAgo)}
+                                      </p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                   
