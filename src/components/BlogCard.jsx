@@ -22,7 +22,7 @@ export function BlogCard(props) {
             {title}
           </h2>
         </Link>
-        <p className="text-muted-foreground text-sm mb-4 flex-grow line-clamp-3">
+        <p className="text-muted-foreground text-sm mb-4  line-clamp-3">
           {description}
         </p>
         <div className="flex flex-wrap items-center text-sm">

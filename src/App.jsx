@@ -13,6 +13,7 @@ import Notification from './components/page/Notification.jsx'
 import ResetPassword from './components/page/ResetPassword.jsx'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import ViewPost from './components/page/ViewPost.jsx'
+import HealthTestPage from './components/page/HealTestPage.jsx'
 import './App.css'
 
 
@@ -27,6 +28,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/post/:id" element={<ViewPost />} />
+        <Route path="/health-test" element={<HealthTestPage />} />
         <Route path="/member" element={<MemberPage />} />
         <Route path="/member/reset-password" element={<MemberResetPassword />} />
         <Route path="/admin-login" element={<AdminLogin />} />
