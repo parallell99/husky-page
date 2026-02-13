@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { API_BASE_URL } from "@/api/client";
 import {
   FileText,
   FolderOpen,
@@ -146,8 +147,7 @@ function Notification() {
         setError(null);
       }
 
-      const endpoint = "https://blog-post-project-api.vercel.app/notifications";
-      
+      const endpoint = `${API_BASE_URL}/notifications`;
       const response = await axios.get(endpoint, {
         timeout: 3000,
       });

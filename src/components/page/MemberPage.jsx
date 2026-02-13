@@ -1,45 +1,72 @@
 import Navbar from "../Navbar";
 import { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { User, RotateCcw } from "lucide-react";
+import { apiClient } from "@/api/client";
 
 function MemberPage() {
     const location = useLocation();
+    const navigate = useNavigate();
     const [showSavedPopup, setShowSavedPopup] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    
     const [userProfile, setUserProfile] = useState({
-        name: "Moodeng ja",
-        username: "moodeng",
+        name: "",
+        username: "",
         email: "",
-        profileImage: null,
+        profilePic: null,
     });
     
-    const [name, setName] = useState("John Doe");
-    const [username, setUsername] = useState("johndoe");
-    const [email, setEmail] = useState("john.doe@example.com");
-    const [profileImage, setProfileImage] = useState("https://res.cloudinary.com/dcbpjtd1r/image/upload/v1728449784/my-blog-post/xgfy0xnvyemkklcqodkg.jpg");
+    const [name, setName] = useState("");
+    const [username, setUsername] = useState("");
+    const [email, setEmail] = useState("");
+    const [profileImage, setProfileImage] = useState(null);
 
-    // Load user profile from localStorage
+    // Load user profile from Supabase API
     useEffect(() => {
-        const storedProfile = localStorage.getItem("user_profile");
-        if (storedProfile) {
-            try {
-                const profile = JSON.parse(storedProfile);
-                setUserProfile({
-                    name: profile.name || "Moodeng ja",
-                    username: profile.username || "moodeng",
-                    email: profile.email || "",
-                    profileImage: profile.profileImage || null,
-                });
-                // Update form fields if profile exists
-                if (profile.name) setName(profile.name);
-                if (profile.username) setUsername(profile.username);
-                if (profile.email) setEmail(profile.email);
-                if (profile.profileImage) setProfileImage(profile.profileImage);
-            } catch (error) {
-                console.error("Error loading profile:", error);
+        const fetchUserProfile = async () => {
+            const token = localStorage.getItem("token");
+            if (!token) {
+                setError("Please login to view your profile");
+                setLoading(false);
+                navigate("/login");
+                return;
             }
-        }
-    }, []);
+
+            try {
+                setLoading(true);
+                const { data } = await apiClient.get("/auth/get-user");
+                console.log("User profile loaded:", data);
+                
+                setUserProfile({
+                    name: data.name || "",
+                    username: data.username || "",
+                    email: data.email || "",
+                    profilePic: data.profilePic || null,
+                });
+                
+                setName(data.name || "");
+                setUsername(data.username || "");
+                setEmail(data.email || "");
+                setProfileImage(data.profilePic || null);
+            } catch (err) {
+                console.error("Error loading user profile:", err);
+                const message = err.response?.data?.error || err.message || "Failed to load profile";
+                setError(message);
+                
+                if (err.response?.status === 401) {
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("isLoggedIn");
+                    navigate("/login");
+                }
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchUserProfile();
+    }, [navigate]);
 
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
@@ -52,35 +79,87 @@ function MemberPage() {
         }
     };
 
-    const handleSave = (e) => {
+    const handleSave = async (e) => {
         e.preventDefault();
-        // Handle save logic here
-        console.log("Saving profile:", { name, username, email });
-        
-        // Show saved popup
-        setShowSavedPopup(true);
-        
-        // Hide popup after 2 seconds
-        setTimeout(() => {
-            setShowSavedPopup(false);
-        }, 2000);
+        const token = localStorage.getItem("token");
+        if (!token) {
+            setError("Please login to save your profile");
+            navigate("/login");
+            return;
+        }
+
+        try {
+            // TODO: Add API endpoint for updating profile (name, username, profilePic)
+            // For now, just show success message
+            console.log("Saving profile:", { name, username, email });
+            
+            // Update local state
+            setUserProfile({
+                ...userProfile,
+                name,
+                username,
+                profilePic: profileImage,
+            });
+            
+            // Show saved popup
+            setShowSavedPopup(true);
+            
+            // Hide popup after 2 seconds
+            setTimeout(() => {
+                setShowSavedPopup(false);
+            }, 2000);
+        } catch (err) {
+            console.error("Error saving profile:", err);
+            setError(err.response?.data?.error || "Failed to save profile");
+        }
     };
 
 
     const getUserDisplayName = () => {
-        return userProfile?.name || "Moodeng ja";
+        return userProfile?.name || name || "User";
     };
 
     const getUserAvatar = () => {
-        return userProfile?.profileImage || profileImage;
+        return userProfile?.profilePic || profileImage || null;
     };
+
+    if (loading) {
+        return (
+            <>
+                <Navbar />
+                <div className="min-h-screen bg-brown-200 pt-15 pb-10 px-4 lg:pt-25 flex items-center justify-center">
+                    <div className="text-center">
+                        <p className="text-brown-600">Loading profile...</p>
+                    </div>
+                </div>
+            </>
+        );
+    }
+
+    if (error && !userProfile.email) {
+        return (
+            <>
+                <Navbar />
+                <div className="min-h-screen bg-brown-200 pt-15 pb-10 px-4 lg:pt-25 flex items-center justify-center">
+                    <div className="text-center">
+                        <p className="text-red-500 mb-4">{error}</p>
+                        <Link to="/login" className="text-brown-600 underline">Go to Login</Link>
+                    </div>
+                </div>
+            </>
+        );
+    }
 
     return (
         <>
             <Navbar />
             <div className="min-h-screen bg-brown-200 pt-15 pb-10 px-4 lg:pt-25">
                 <div className="max-w-md mx-auto">
-                   
+                    {error && (
+                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4">
+                            {error}
+                        </div>
+                    )}
 
                     {/* User Profile Header Section */}
 
@@ -145,11 +224,17 @@ function MemberPage() {
                         {/* Profile Picture Section */}
                         <div className="flex flex-col items-center mb-8 pt-2">
                         <div className="relative mb-4">
-                            <img
-                                src={profileImage}
-                                alt="Profile"
-                                className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-md"
-                            />
+                            {profileImage ? (
+                                <img
+                                    src={profileImage}
+                                    alt="Profile"
+                                    className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-md"
+                                />
+                            ) : (
+                                <div className="w-32 h-32 rounded-full bg-brown-300 border-4 border-white shadow-md flex items-center justify-center">
+                                    <User className="w-16 h-16 text-brown-600" />
+                                </div>
+                            )}
                         </div>
                         <label className="cursor-pointer">
                             <input

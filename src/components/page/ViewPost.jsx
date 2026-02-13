@@ -2,6 +2,7 @@ import Navbar from "../Navbar";
 import { useParams, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { postByIdUrl } from "@/api/client";
 import { blogPosts as fallbackPosts } from "../../data/blogPost";
 import facebookicon from "../../assets/image/Facebook_black.svg"
 import twittericon from "../../assets/image/Twitter_black.svg"
@@ -47,35 +48,25 @@ function CardDetail() {
     useEffect(() => {
         const fetchPost = async () => {
             try {
-                // Try to fetch from API first
-                const response = await axios.get(`https://blog-post-project-api.vercel.app/${id}`, {
-                    timeout: 3000
-                });
-
-                // Handle different response formats
-                let postData = null;
-                if (response.data) {
-                    if (Array.isArray(response.data)) {
-                        postData = response.data.find(p => p.id === parseInt(id)) || response.data[0];
-                    } else if (response.data.id) {
-                        postData = response.data;
-                    } else if (response.data.post) {
-                        postData = response.data.post;
-                    } else if (response.data.data) {
-                        postData = response.data.data;
-                    }
-                }
-
-                if (postData) {
-                    setPost(postData);
+                const response = await axios.get(postByIdUrl(id), { timeout: 5000 });
+                if (response.data && (response.data.id || response.data.title)) {
+                    const p = response.data;
+                    setPost({
+                        id: p.id,
+                        title: p.title,
+                        image: p.image,
+                        description: p.description,
+                        content: p.content,
+                        category: p.category ?? (p.category_id != null ? `Category ${p.category_id}` : "Uncategorized"),
+                        date: p.created_at ? new Date(p.created_at).toLocaleDateString() : null,
+                        author: p.author ?? "Admin",
+                    });
                 } else {
-                    // Fallback to local data
                     const localPost = fallbackPosts.find(p => p.id === parseInt(id));
                     setPost(localPost || null);
                 }
             } catch (error) {
                 console.error("Error fetching post:", error.message);
-                // Fallback to local data
                 const localPost = fallbackPosts.find(p => p.id === parseInt(id));
                 setPost(localPost || null);
             } finally {

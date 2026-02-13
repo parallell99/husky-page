@@ -2,8 +2,7 @@ import Navbar from "../Navbar";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
-
-
+import { apiClient } from "@/api/client";
 
 function Login() {
     const navigate = useNavigate();
@@ -14,57 +13,68 @@ function Login() {
         email: "",
         password: ""
     });
+    const [loading, setLoading] = useState(false);
+    const [submitError, setSubmitError] = useState("");
 
     const validateEmail = (email) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
     };
     
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
-        
-        const newErrors = {
-            email: "",
-            password: ""
-        };
+        const newErrors = { email: "", password: "" };
 
-        // Validate email
         if (email.trim() === "") {
             newErrors.email = "Email is required";
         } else if (!validateEmail(email)) {
             newErrors.email = "Email must be a valid email";
         }
-
-        // Validate password
         if (password === "") {
             newErrors.password = "Password is required";
         }
 
         setErrors(newErrors);
+        setSubmitError("");
 
-        // If no errors, proceed with login
         if (!newErrors.email && !newErrors.password) {
-            // Set login status in localStorage
-            localStorage.setItem("isLoggedIn", "true");
-            
-            // Initialize user profile if it doesn't exist
-            const existingProfile = localStorage.getItem("user_profile");
-            if (!existingProfile) {
-                const defaultProfile = {
-                    name: "Moodeng ja",
-                    username: email.split("@")[0],
-                    email: email,
-                    bio: "",
-                    profileImage: null,
-                };
-                localStorage.setItem("user_profile", JSON.stringify(defaultProfile));
+            setLoading(true);
+            try {
+                console.log("Attempting to login:", { email: email.trim() });
+                const { data } = await apiClient.post("/auth/login", {
+                    email: email.trim(),
+                    password,
+                });
+                console.log("Login successful:", data);
+                
+                if (data.access_token) {
+                    localStorage.setItem("token", data.access_token);
+                    localStorage.setItem("isLoggedIn", "true");
+                    console.log("Token saved to localStorage:", localStorage.getItem("token") ? "Yes" : "No");
+                    window.dispatchEvent(new Event("loginChange"));
+                    console.log("Navigating to home page...");
+                    navigate("/");
+                } else {
+                    console.error("No access_token in response:", data);
+                    setSubmitError("Login successful but no token received. Please try again.");
+                }
+            } catch (err) {
+                console.error("Login error:", err);
+                console.error("Error response:", err.response);
+                console.error("Error data:", err.response?.data);
+                
+                let message = "Login failed. Please try again.";
+                if (err.response?.data?.error) {
+                    message = err.response.data.error;
+                } else if (err.response?.status === 0 || err.code === "ERR_NETWORK" || err.message?.includes("Network Error")) {
+                    message = "Cannot connect to server. Please check if the server is running and try again.";
+                } else if (err.message) {
+                    message = err.message;
+                }
+                setSubmitError(message);
+            } finally {
+                setLoading(false);
             }
-            
-            // Trigger custom event for Navbar to update
-            window.dispatchEvent(new Event("loginChange"));
-            
-            // Navigate to home page
-            navigate("/");
         }
     }
 
@@ -122,8 +132,17 @@ function Login() {
                             </div>
                             {errors.password && <p className="text-xs text-red-500">{errors.password}</p>}
                         </div>
+                        {submitError && (
+                            <p className="text-xs text-red-500 text-center mt-4">{submitError}</p>
+                        )}
                         <div className="flex justify-center">
-                            <button type="submit" className="w-30 bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 mt-6">Log up</button>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-30 bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {loading ? "Logging in..." : "Log in"}
+                            </button>
                         </div>
                     </form>
                     <p className="text-xs text-center pt-5">

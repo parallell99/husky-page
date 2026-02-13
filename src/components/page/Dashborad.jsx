@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import axios from "axios";
+import { API_BASE_URL } from "@/api/client";
 import { blogPosts as fallbackPosts } from "@/data/blogPost";
 import { getArticles, deleteArticle } from "@/utils/articleStorage";
 
@@ -99,33 +100,12 @@ function Dashboard() {
         setError(null);
       }
       
-      // Try different possible endpoints with shorter timeout
-      const endpoints = [
-        "https://blog-post-project-api.vercel.app",
-        "https://blog-post-project-api.vercel.app/posts",
-        "https://blog-post-project-api.vercel.app/articles",
-      ];
-
-      let response = null;
-      let lastError = null;
-
-      // Try each endpoint until one works
-      for (const endpoint of endpoints) {
-        try {
-          response = await axios.get(endpoint, {
-            timeout: 3000, // Reduced timeout to 3 seconds for faster loading
-          });
-          console.log(`Success fetching from ${endpoint}:`, response.data);
-          break;
-        } catch (err) {
-          lastError = err;
-          console.log(`Failed to fetch from ${endpoint}:`, err.message);
-          continue;
-        }
-      }
-
-      if (!response) {
-        throw lastError || new Error("All endpoints failed");
+      const endpoint = `${API_BASE_URL}/posts`;
+      const response = await axios.get(endpoint, {
+        timeout: 5000,
+      });
+      if (response.data) {
+        console.log("Fetched posts from API:", response.data);
       }
 
       // Handle different response formats
@@ -149,12 +129,13 @@ function Dashboard() {
         }
       }
 
-      // Map API response to our expected format
+      // Map API response to our expected format (server: id, title, category_id, status_id)
+      const statusLabels = { 1: "Draft", 2: "Published" };
       const mappedArticles = articlesData.map((article, index) => ({
         id: article.id || index + 1,
         title: article.title || article.name || "Untitled",
-        category: article.category || "Uncategorized",
-        status: article.status || "Published",
+        category: article.category ?? (article.category_id != null ? `Category ${article.category_id}` : "Uncategorized"),
+        status: article.status ?? statusLabels[article.status_id] ?? "Published",
       }));
         
       if (mappedArticles.length > 0) {

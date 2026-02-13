@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Bell, User, RotateCcw, LogOut, ChevronDown } from "lucide-react";
+import { apiClient } from "@/api/client";
 
 function Navbar() {
   const navigate = useNavigate();
@@ -8,33 +9,57 @@ function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
   const dropdownRef = useRef(null);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const notificationDropdownRef = useRef(null);
 
-  // Check login status from localStorage
+  // Fetch user profile from Supabase API
+  const fetchUserProfile = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIsLoggedIn(false);
+      setUserProfile(null);
+      return;
+    }
+
+    try {
+      setLoadingProfile(true);
+      const { data } = await apiClient.get("/auth/get-user");
+      setUserProfile({
+        name: data.name || "",
+        username: data.username || "",
+        email: data.email || "",
+        profileImage: data.profilePic || null,
+      });
+      setIsLoggedIn(true);
+    } catch (err) {
+      console.error("Error fetching user profile:", err);
+      if (err.response?.status === 401) {
+        // Token expired or invalid
+        localStorage.removeItem("token");
+        localStorage.removeItem("isLoggedIn");
+        setIsLoggedIn(false);
+        setUserProfile(null);
+      }
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  // Check login status and fetch user profile
   useEffect(() => {
     const checkLoginStatus = () => {
       const loginStatus = localStorage.getItem("isLoggedIn");
-      const profile = localStorage.getItem("user_profile");
+      const token = localStorage.getItem("token");
       
-      setIsLoggedIn(loginStatus === "true");
-      
-      if (profile) {
-        try {
-          setUserProfile(JSON.parse(profile));
-        } catch (error) {
-          console.error("Error parsing user profile:", error);
-        }
+      if (loginStatus === "true" && token) {
+        setIsLoggedIn(true);
+        fetchUserProfile();
       } else {
-        // Default profile if none exists
-        setUserProfile({
-          name: "Moodeng ja",
-          username: "moodeng",
-          email: "",
-          profileImage: null,
-        });
+        setIsLoggedIn(false);
+        setUserProfile(null);
       }
     };
 
@@ -105,8 +130,10 @@ function Navbar() {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("token");
     localStorage.removeItem("isLoggedIn");
     setIsLoggedIn(false);
+    setUserProfile(null);
     setShowDropdown(false);
     // Trigger custom event for Navbar update
     window.dispatchEvent(new Event("loginChange"));
@@ -117,14 +144,14 @@ function Navbar() {
     if (userProfile?.name) {
       return userProfile.name;
     }
-    return "Moodeng ja";
+    if (userProfile?.username) {
+      return userProfile.username;
+    }
+    return "User";
   };
 
   const getUserAvatar = () => {
-    if (userProfile?.profileImage) {
-      return userProfile.profileImage;
-    }
-    return null;
+    return userProfile?.profileImage || null;
   };
 
   // Notification helper functions

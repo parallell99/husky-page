@@ -14,6 +14,7 @@ import ResetPassword from './components/page/ResetPassword.jsx'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import ViewPost from './components/page/ViewPost.jsx'
 import HealthTestPage from './components/page/HealTestPage.jsx'
+import CreatePostComponent from './components/page/CreatePostComponent.jsx'
 import './App.css'
 
 
@@ -41,6 +42,7 @@ function App() {
         <Route path="/dashboard/profile" element={<Profile />} />
         <Route path="/dashboard/notification" element={<Notification />} />
         <Route path="/dashboard/reset-password" element={<ResetPassword />} />
+        <Route path="/dashboard/create-post" element={<CreatePostComponent />} />
       </Routes>
     </Router>
     </>
