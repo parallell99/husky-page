@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { blogPosts } from "@/data/blogPost";
 import { selectData } from "@/data/select";
+import { apiClient } from "@/api/client";
 
 import { useState, useMemo, useEffect } from "react";
 
@@ -24,24 +25,27 @@ function ArticleSection() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [selectedSearchQuery, setSelectedSearchQuery] = useState("");
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Filter posts for search results dropdown (only by search term, ignores category)
   // Shows results immediately as user types (like Google)
   const searchResults = useMemo(() => {
     if (!search.trim()) return [];
     const searchLower = search.toLowerCase();
-    return blogPosts.filter((post) =>
+    return posts.filter((post) =>
       post.title.toLowerCase().includes(searchLower) ||
       post.description.toLowerCase().includes(searchLower) ||
       post.author.toLowerCase().includes(searchLower) ||
       post.category.toLowerCase().includes(searchLower)
     );
-  }, [search]);
+  }, [search, posts]);
 
   // Filter posts for BlogCard grid (by both search and category)
   // Only shows results when user selects from dropdown
   const filteredPosts = useMemo(() => {
-    return blogPosts.filter((post) => {
+    return posts.filter((post) => {
       // Filter by category
       const matchesCategory =
         selectedCategory === "All" || post.category === selectedCategory;
@@ -57,7 +61,44 @@ function ArticleSection() {
       
       return matchesCategory && matchesSearch;
     });
-  }, [selectedSearchQuery, selectedCategory]);
+  }, [selectedSearchQuery, selectedCategory, posts]);
+
+  // Fetch posts from Supabase API
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const { data } = await apiClient.get("/posts", {
+          params: { page: 1, limit: 100 }, // Get more posts for filtering
+        });
+        
+        // Map API response to BlogCard format
+        const mappedPosts = data.posts.map((post) => ({
+          id: post.id,
+          title: post.title || "Untitled",
+          image: post.image || "",
+          category: post.category || (post.category_id ? `Category ${post.category_id}` : "Uncategorized"),
+          description: post.description || "",
+          author: post.author || "Admin",
+          date: post.created_at 
+            ? new Date(post.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+            : new Date().toLocaleDateString(),
+        }));
+        
+        setPosts(mappedPosts);
+      } catch (err) {
+        console.error("Error fetching posts:", err);
+        setError("Failed to load posts. Showing fallback data.");
+        // Use fallback data if API fails
+        setPosts(blogPosts);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPosts();
+  }, []);
 
   // Reset selectedSearchQuery when search is cleared to show all posts (highlight page)
   useEffect(() => {
@@ -155,20 +196,34 @@ function ArticleSection() {
           </div>
         </div>
       </div>
-      <div className="px-3 py-3 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:px-20">
-        {filteredPosts.map((post) => (
-          <BlogCard
-            key={post.id}
-            id={post.id}
-            image={post.image}
-            category={post.category}
-            title={post.title}
-            description={post.description}
-            author={post.author}
-            date={post.date}
-          />
-        ))}
-      </div>
+      {loading ? (
+        <div className="px-3 py-10 text-center">
+          <p className="text-brown-600">Loading articles...</p>
+        </div>
+      ) : error ? (
+        <div className="px-3 py-10 text-center">
+          <p className="text-orange-500 text-sm">{error}</p>
+        </div>
+      ) : filteredPosts.length === 0 ? (
+        <div className="px-3 py-10 text-center">
+          <p className="text-brown-400">No articles found.</p>
+        </div>
+      ) : (
+        <div className="px-3 py-3 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:px-20">
+          {filteredPosts.map((post) => (
+            <BlogCard
+              key={post.id}
+              id={post.id}
+              image={post.image}
+              category={post.category}
+              title={post.title}
+              description={post.description}
+              author={post.author}
+              date={post.date}
+            />
+          ))}
+        </div>
+      )}
     </>
   );
 }
