@@ -14,17 +14,27 @@ import {
   Edit,
   Trash2,
   X,
+  Loader2,
 } from "lucide-react";
-import { getCategories, deleteCategory } from "@/utils/categoryStorage";
+import axios from "axios";
+import { API_BASE_URL } from "@/api/client";
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 function CategoryManagement() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const menuItems = [
     { icon: FileText, label: "Article Management", active: false, path: "/dashboard" },
@@ -35,18 +45,25 @@ function CategoryManagement() {
     { icon: LogOut, label: "Logout", active: false, path: "/dashboard" },
   ];
 
-  // Load categories
-  const loadCategories = () => {
-    const cats = getCategories();
-    setCategories(cats);
+  const loadCategories = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/categories`, { timeout: 5000 });
+      const list = Array.isArray(res.data) ? res.data : res.data?.data ?? res.data?.categories ?? [];
+      setCategories(list);
+    } catch (err) {
+      console.error("Failed to load categories:", err);
+      setError(err.response?.data?.message || err.message || "Failed to load categories.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Check for toast notification from URL params
   useEffect(() => {
     const toast = searchParams.get("toast");
     if (toast) {
-      loadCategories(); // Refresh categories
-      
+      loadCategories();
       if (toast === "created") {
         setToastMessage("Create category: Category has been successfully created");
         setShowToast(true);
@@ -57,30 +74,38 @@ function CategoryManagement() {
         setToastMessage("Category deleted successfully");
         setShowToast(true);
       }
-      
-      setSearchParams({}); // Clear URL params
-      setTimeout(() => {
-        setShowToast(false);
-      }, 5000);
+      setSearchParams({});
+      setTimeout(() => setShowToast(false), 5000);
     }
   }, [searchParams, setSearchParams]);
 
-  // Load categories on mount
   useEffect(() => {
     loadCategories();
   }, []);
 
-  // Handle delete confirmation
   const handleDeleteClick = (categoryId) => {
     setDeleteConfirmId(categoryId);
   };
 
-  const handleDeleteConfirm = () => {
-    if (deleteConfirmId) {
-      deleteCategory(deleteConfirmId);
-      loadCategories(); // Refresh list
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmId) return;
+    setDeleting(true);
+    try {
+      await axios.delete(`${API_BASE_URL}/categories/${deleteConfirmId}`, {
+        headers: getAuthHeaders(),
+        timeout: 5000,
+      });
+      setCategories((prev) => prev.filter((c) => c.id !== deleteConfirmId));
       setDeleteConfirmId(null);
-      navigate("/dashboard/categories?toast=deleted");
+      setToastMessage("Category deleted successfully");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 5000);
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || "Failed to delete category.";
+      setError(msg);
+      setDeleteConfirmId(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -206,7 +231,29 @@ function CategoryManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brown-300">
-                  {filteredCategories.length === 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td colSpan={2} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="animate-spin text-brown-400" size={24} />
+                          <span className="text-sm text-brown-400">Loading categories...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : error ? (
+                    <tr>
+                      <td colSpan={2} className="px-6 py-6 text-center">
+                        <span className="text-sm text-red-600">{error}</span>
+                        <button
+                          type="button"
+                          onClick={() => loadCategories()}
+                          className="ml-2 text-sm text-brown-600 underline"
+                        >
+                          Retry
+                        </button>
+                      </td>
+                    </tr>
+                  ) : filteredCategories.length === 0 ? (
                     <tr>
                       <td colSpan={2} className="px-6 py-12 text-center">
                         <span className="text-sm text-brown-400">
@@ -270,15 +317,17 @@ function CategoryManagement() {
             <div className="flex items-center justify-end gap-3">
               <Button
                 onClick={handleDeleteCancel}
+                disabled={deleting}
                 className="bg-white hover:bg-brown-50 text-brown-600 border border-brown-300 rounded-lg px-4 py-2 h-auto"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleDeleteConfirm}
+                disabled={deleting}
                 className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 h-auto"
               >
-                Delete
+                {deleting ? <Loader2 className="animate-spin" size={18} /> : "Delete"}
               </Button>
             </div>
           </div>

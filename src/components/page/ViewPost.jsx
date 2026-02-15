@@ -68,15 +68,21 @@ function CardDetail() {
                 const postResponse = await apiClient.get(`/posts/${id}`);
                 if (postResponse.data && (postResponse.data.id || postResponse.data.title)) {
                     const p = postResponse.data;
+                    // ใช้เฉพาะวันที่ (ไทย พ.ศ.) เช่น 15/2/2569
+                    const formatThaiDate = (dateStr) => {
+                        if (!dateStr) return "";
+                        const d = new Date(dateStr);
+                        return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear() + 543}`;
+                    };
                     setPost({
                         id: p.id,
                         title: p.title,
                         image: p.image,
                         description: p.description,
                         content: p.content,
-                        category: p.category ?? (p.category_id != null ? `Category ${p.category_id}` : "Uncategorized"),
-                        date: p.created_at ? new Date(p.created_at).toLocaleDateString() : null,
-                        author: p.author ?? "Admin",
+                        category: p.category_name ?? p.category ?? "Uncategorized",
+                        date: (p.date || p.created_at) ? formatThaiDate(p.date || p.created_at) : null,
+                        author: p.author_name ?? p.author ?? "ผู้เขียน",
                     });
                 } else {
                     const localPost = fallbackPosts.find(p => p.id === parseInt(id));

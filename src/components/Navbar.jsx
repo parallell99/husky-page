@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, User, RotateCcw, LogOut, ChevronDown } from "lucide-react";
+import { Bell, User, RotateCcw, LogOut, ChevronDown, LayoutDashboard } from "lucide-react";
 import { apiClient } from "@/api/client";
 
 function Navbar() {
@@ -32,6 +32,7 @@ function Navbar() {
         username: data.username || "",
         email: data.email || "",
         profileImage: data.profilePic || null,
+        role: data.role || null,
       });
       setIsLoggedIn(true);
     } catch (err) {
@@ -215,8 +216,14 @@ function Navbar() {
     return getDefaultNotifications();
   };
 
+  // admin แสดงเฉพาะแจ้งเตือน comment และ like
+  const notificationsToShow =
+    userProfile?.role === "admin"
+      ? notifications.filter((n) => n.type === "comment" || n.type === "like")
+      : notifications;
+
   const getNotificationCountDisplay = () => {
-    const count = notifications.length;
+    const count = notificationsToShow.length;
     if (count <= 0) return null;
     if (count > 99) return "99+";
     return count.toString();
@@ -264,7 +271,7 @@ function Navbar() {
               >
                 <Bell size={20} />
                 {/* Notification count badge */}
-                {notifications.length > 0 && (
+                {notificationsToShow.length > 0 && (
                   <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
                     {getNotificationCountDisplay()}
                   </span>
@@ -274,13 +281,13 @@ function Navbar() {
               {/* Notification Dropdown */}
               {showNotificationDropdown && (
                 <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
-                  {notifications.length === 0 ? (
+                  {notificationsToShow.length === 0 ? (
                     <div className="px-4 py-6 text-center">
                       <span className="text-sm text-brown-400">No notifications</span>
                     </div>
                   ) : (
                     <div className="divide-y divide-brown-200">
-                      {notifications.map((notification) => (
+                      {notificationsToShow.map((notification) => (
                         <button
                           key={notification.id}
                           onClick={() => handleNotificationClick(notification)}
@@ -354,6 +361,16 @@ function Navbar() {
               {/* Dropdown Menu */}
               {showDropdown && (
                 <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50">
+                  {userProfile?.role === "admin" && (
+                    <Link
+                      to="/dashboard"
+                      onClick={() => setShowDropdown(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100"
+                    >
+                      <LayoutDashboard size={16} className="text-brown-600" />
+                      <span className="font-medium">Dashboard</span>
+                    </Link>
+                  )}
                   <Link
                     to="/member"
                     onClick={() => setShowDropdown(false)}
@@ -405,7 +422,7 @@ function Navbar() {
               >
                 <Bell size={18} />
                 {/* Notification count badge */}
-                {notifications.length > 0 && (
+                {notificationsToShow.length > 0 && (
                   <span className="absolute top-0 right-0 min-w-[16px] h-[16px] bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center px-0.5">
                     {getNotificationCountDisplay()}
                   </span>
@@ -415,13 +432,13 @@ function Navbar() {
               {/* Notification Dropdown - Mobile */}
               {showNotificationDropdown && (
                 <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
-                  {notifications.length === 0 ? (
+                  {notificationsToShow.length === 0 ? (
                     <div className="px-4 py-6 text-center">
                       <span className="text-sm text-brown-400">No notifications</span>
                     </div>
                   ) : (
                     <div className="divide-y divide-brown-200">
-                      {notifications.map((notification) => (
+                      {notificationsToShow.map((notification) => (
                         <button
                           key={notification.id}
                           onClick={() => handleNotificationClick(notification)}
@@ -511,7 +528,7 @@ function Navbar() {
                         >
                           <Bell size={20} />
                           {/* Notification count badge */}
-                          {notifications.length > 0 && (
+                          {notificationsToShow.length > 0 && (
                             <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
                               {getNotificationCountDisplay()}
                             </span>
@@ -521,13 +538,13 @@ function Navbar() {
                         {/* Notification Dropdown - Mobile Hamburger Menu */}
                         {showNotificationDropdown && (
                           <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
-                            {notifications.length === 0 ? (
+                            {notificationsToShow.length === 0 ? (
                               <div className="px-4 py-6 text-center">
                                 <span className="text-sm text-brown-400">No notifications</span>
                               </div>
                             ) : (
                               <div className="divide-y divide-brown-200">
-                                {notifications.map((notification) => (
+                                {notificationsToShow.map((notification) => (
                                   <button
                                     key={notification.id}
                                     onClick={() => handleNotificationClick(notification)}
@@ -569,6 +586,16 @@ function Navbar() {
                   
                   {/* Menu Items */}
                   <div className="p-4 flex flex-col gap-2">
+                    {userProfile?.role === "admin" && (
+                      <Link 
+                        to="/dashboard" 
+                        onClick={() => setIsOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-brown-600 hover:bg-brown-100 transition-colors"
+                      >
+                        <LayoutDashboard size={18} className="text-brown-600" />
+                        <span>Dashboard</span>
+                      </Link>
+                    )}
                     <Link 
                       to="/member" 
                       onClick={() => setIsOpen(false)}

@@ -11,7 +11,15 @@ import {
   LogOut,
   Eye,
   EyeOff,
+  Loader2,
 } from "lucide-react";
+import axios from "axios";
+import { API_BASE_URL } from "@/api/client";
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 function ResetPassword() {
   const navigate = useNavigate();
@@ -26,6 +34,9 @@ function ResetPassword() {
     confirm: false,
   });
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
   const menuItems = [
     { icon: FileText, label: "Article Management", active: false, path: "/dashboard" },
@@ -37,31 +48,55 @@ function ResetPassword() {
   ];
 
   const handleResetClick = () => {
-    // Validate passwords match
-    if (formData.newPassword !== formData.confirmPassword) {
-      return; // You could show an error here
+    if (formData.newPassword !== formData.confirmPassword) return;
+    if (!formData.currentPassword || !formData.newPassword || !formData.confirmPassword) return;
+    if (formData.newPassword.length < 6) {
+      setError("New password must be at least 6 characters.");
+      return;
     }
-    if (!formData.currentPassword || !formData.newPassword || !formData.confirmPassword) {
-      return; // You could show an error here
-    }
+    setError(null);
     setShowConfirmModal(true);
   };
 
-  const handleConfirmReset = () => {
-    // Simulate password reset
-    console.log("Resetting password...");
-    // Clear form
-    setFormData({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
-    setShowConfirmModal(false);
-    // You could show a success toast here
+  const handleConfirmReset = async () => {
+    const currentP = (formData.currentPassword || "").trim();
+    const newP = (formData.newPassword || "").trim();
+    if (!newP || newP.length < 6) {
+      setError("New password must be at least 6 characters.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await axios.put(
+        `${API_BASE_URL}/auth/reset-password`,
+        { oldPassword: currentP, newPassword: newP },
+        {
+          headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+          timeout: 10000,
+        }
+      );
+      setFormData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setShowConfirmModal(false);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 5000);
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || "Failed to reset password.";
+      setError(msg);
+      if (err.response?.status === 401) {
+        setTimeout(() => {
+          setShowConfirmModal(false);
+          navigate("/admin-login");
+        }, 1500);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancelReset = () => {
     setShowConfirmModal(false);
+    setError(null);
   };
 
   const togglePasswordVisibility = (field) => {
@@ -132,6 +167,16 @@ function ResetPassword() {
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-brown-100">
         <div className="p-8 w-full mx-auto">
+          {error && (
+            <div className="mb-4 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="mb-4 px-4 py-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+              Password updated successfully.
+            </div>
+          )}
           {/* Profile Card */}
           <div className="bg-white rounded-xl shadow-sm border border-brown-300 p-6">
             {/* Header with Reset Button */}
@@ -273,21 +318,28 @@ function ResetPassword() {
             <h3 className="text-lg font-semibold text-brown-600 mb-2">
               Reset Password
             </h3>
-            <p className="text-sm text-brown-400 mb-6">
+            <p className="text-sm text-brown-400 mb-4">
               Do you want to reset your password?
             </p>
+            {error && (
+              <p className="text-sm text-red-600 mb-4 bg-red-50 px-3 py-2 rounded-lg">
+                {error}
+              </p>
+            )}
             <div className="flex items-center justify-end gap-3">
               <Button
                 onClick={handleCancelReset}
+                disabled={loading}
                 className="bg-white hover:bg-brown-50 text-brown-600 border border-brown-300 rounded-lg px-4 py-2 h-auto"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleConfirmReset}
+                disabled={loading}
                 className="bg-brown-600 hover:bg-brown-500 text-white rounded-lg px-4 py-2 h-auto"
               >
-                Reset
+                {loading ? <Loader2 className="animate-spin" size={18} /> : "Reset"}
               </Button>
             </div>
           </div>

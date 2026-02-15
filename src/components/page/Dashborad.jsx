@@ -26,8 +26,6 @@ import {
 } from "lucide-react";
 import axios from "axios";
 import { API_BASE_URL } from "@/api/client";
-import { blogPosts as fallbackPosts } from "@/data/blogPost";
-import { getArticles, deleteArticle } from "@/utils/articleStorage";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -42,35 +40,16 @@ function Dashboard() {
   const [toastMessage, setToastMessage] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
-  // Map fallback posts to articles format
-  const getFallbackArticles = () => {
-    return fallbackPosts.map((post, index) => ({
-      id: post.id,
-      title: post.title,
-      category: post.category,
-      status: index % 3 === 0 ? "Draft" : "Published", // Mix of Draft and Published
-    }));
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  // Load articles from storage and merge with fallback
-  const loadArticles = () => {
-    const storedArticles = getArticles();
-    const fallbackArticles = getFallbackArticles();
-    
-    // Merge stored articles with fallback, prioritizing stored
-    const storedIds = new Set(storedArticles.map((a) => a.id));
-    const merged = [...storedArticles, ...fallbackArticles.filter((a) => !storedIds.has(a.id))];
-    
-    return merged;
-  };
-
-  // Check for toast notification from URL params and refresh articles
+  // Check for toast notification from URL params and refresh articles from API
   useEffect(() => {
     const toast = searchParams.get("toast");
     if (toast) {
-      // Refresh articles list whenever toast appears
-      setArticles(loadArticles());
-      
+      fetchArticles(false);
       if (toast === "draft") {
         setToastMessage("Create article and saved as draft. You can publish article later.");
         setShowToast(true);
@@ -92,56 +71,38 @@ function Dashboard() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Fetch articles from API (background fetch)
+  // Fetch articles from API (ข้อมูลจริงจาก backend)
   const fetchArticles = async (showError = false) => {
     try {
       setLoading(true);
-      if (showError) {
-        setError(null);
-      }
-      
+      if (showError) setError(null);
+
       const endpoint = `${API_BASE_URL}/posts`;
       const response = await axios.get(endpoint, {
+        params: { limit: 100, page: 1 },
         timeout: 5000,
+        headers: getAuthHeaders(),
       });
-      if (response.data) {
-        console.log("Fetched posts from API:", response.data);
-      }
 
-      // Handle different response formats
       let articlesData = [];
-      if (response.data) {
-        if (Array.isArray(response.data)) {
-          articlesData = response.data;
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          articlesData = response.data.data;
-        } else if (response.data.posts && Array.isArray(response.data.posts)) {
-          articlesData = response.data.posts;
-        } else if (response.data.articles && Array.isArray(response.data.articles)) {
-          articlesData = response.data.articles;
-        } else if (response.data.results && Array.isArray(response.data.results)) {
-          articlesData = response.data.results;
-        } else {
-          const values = Object.values(response.data);
-          if (values.length > 0 && Array.isArray(values[0])) {
-            articlesData = values[0];
-          }
-        }
+      if (response.data?.posts && Array.isArray(response.data.posts)) {
+        articlesData = response.data.posts;
+      } else if (Array.isArray(response.data)) {
+        articlesData = response.data;
+      } else if (response.data?.data && Array.isArray(response.data.data)) {
+        articlesData = response.data.data;
       }
 
-      // Map API response to our expected format (server: id, title, category_id, status_id)
       const statusLabels = { 1: "Draft", 2: "Published" };
-      const mappedArticles = articlesData.map((article, index) => ({
-        id: article.id || index + 1,
-        title: article.title || article.name || "Untitled",
-        category: article.category ?? (article.category_id != null ? `Category ${article.category_id}` : "Uncategorized"),
-        status: article.status ?? statusLabels[article.status_id] ?? "Published",
+      const mappedArticles = articlesData.map((item, index) => ({
+        id: item.id ?? index + 1,
+        title: item.title || item.name || "Untitled",
+        category: item.category_name ?? item.category ?? "Uncategorized",
+        status: item.status ?? statusLabels[item.status_id] ?? "Published",
       }));
-        
-      if (mappedArticles.length > 0) {
-        setArticles(mappedArticles);
-        setError(null); // Clear error if API succeeds
-      }
+
+      setArticles(mappedArticles);
+      setError(null);
     } catch (err) {
       console.error("Error fetching articles:", err);
       // Only show error if explicitly requested (e.g., on retry)
@@ -167,12 +128,8 @@ function Dashboard() {
     }
   };
 
-  // Load articles on mount
+  // โหลดบทความจาก API ตอนเปิดหน้า
   useEffect(() => {
-    // Set articles from storage/fallback immediately for instant display
-    setArticles(loadArticles());
-    
-    // Fetch from API in background (silently, without showing error)
     fetchArticles(false);
   }, []);
 
@@ -204,11 +161,23 @@ function Dashboard() {
     setDeleteConfirmId(articleId);
   };
 
-  const handleDeleteConfirm = () => {
-    if (deleteConfirmId) {
-      deleteArticle(deleteConfirmId);
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmId) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/posts/${deleteConfirmId}`, {
+        headers: getAuthHeaders(),
+        timeout: 5000,
+      });
       setDeleteConfirmId(null);
-      navigate("/dashboard?toast=deleted");
+      setArticles((prev) => prev.filter((a) => a.id !== deleteConfirmId));
+      setToastMessage("Article deleted successfully.");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 5000);
+    } catch (err) {
+      console.error("Delete article failed:", err);
+      const msg = err.response?.data?.message || err.message || "Failed to delete article.";
+      setError(msg);
+      setDeleteConfirmId(null);
     }
   };
 
@@ -250,7 +219,10 @@ function Dashboard() {
       {/* Left Sidebar */}
       <aside className="w-64 bg-white border-r border-brown-300 flex flex-col shadow-sm">
         {/* Logo */}
-        <div className="p-6 border-b border-brown-300 bg-brown-200">
+        <div
+          className="p-6 border-b border-brown-300 bg-brown-200 cursor-pointer"
+          onClick={() => navigate("/")}
+        >
           <div className="flex items-center gap-2 mb-2">
             <span className="text-2xl font-semibold text-brown-600">hh</span>
             <span className="text-2xl font-semibold text-green">.</span>

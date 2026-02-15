@@ -17,12 +17,30 @@ import {
   KeyRound,
   LogOut,
   ArrowLeft,
-  Upload,
   X,
   Image,
+  Loader2,
 } from "lucide-react";
-import { blogPosts as fallbackPosts } from "@/data/blogPost";
-import { saveArticle, getArticleById } from "@/utils/articleStorage";
+import axios from "axios";
+import { API_BASE_URL } from "@/api/client";
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const buildCreateFormData = (formData, statusId) => {
+  const fd = new FormData();
+  fd.append("title", formData.title || "");
+  fd.append("category_id", String(formData.category_id));
+  fd.append("description", formData.introduction || "");
+  fd.append("content", formData.content || "");
+  fd.append("status_id", String(statusId));
+  return fd;
+};
+
+const STATUS_DRAFT = 1;
+const STATUS_PUBLISHED = 2;
 
 function CreateArticle() {
   const navigate = useNavigate();
@@ -31,59 +49,66 @@ function CreateArticle() {
   const articleId = id;
   const [formData, setFormData] = useState({
     thumbnail: null,
-    category: "",
-    author: "Admin User", // Default author name
+    image: "", // URL จาก API (โหมดแก้ไข)
+    category_id: 1,
+    author: "Admin User",
     title: "",
     introduction: "",
     content: "",
-    status: "Draft",
+    status_id: STATUS_DRAFT,
   });
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [categoriesList, setCategoriesList] = useState([]);
   const MAX_INTRODUCTION_LENGTH = 200;
 
-  // Load article data if editing
+  // โหลดรายการ category จาก API (ข้อมูลจริงจาก Supabase)
   useEffect(() => {
-    if (isEditMode && articleId) {
-      // First try to get from localStorage
-      let existingArticle = getArticleById(articleId);
-      
-      // If not found in localStorage, check fallback data
-      if (!existingArticle) {
-        const fallbackArticle = fallbackPosts.find((p) => p.id === parseInt(articleId));
-        if (fallbackArticle) {
-          // Convert fallback post to article format
-          existingArticle = {
-            id: fallbackArticle.id,
-            thumbnail: fallbackArticle.image || null,
-            category: fallbackArticle.category || "",
-            author: fallbackArticle.author || "Admin User",
-            title: fallbackArticle.title || "",
-            introduction: fallbackArticle.description || "",
-            content: fallbackArticle.content || "",
-            status: "Published", // Default status for fallback articles
-            thumbnailPreview: fallbackArticle.image || null,
-          };
-        }
-      }
-      
-      if (existingArticle) {
+    axios
+      .get(`${API_BASE_URL}/categories`, { timeout: 5000 })
+      .then((res) => {
+        const list = Array.isArray(res.data) ? res.data : res.data?.data ?? res.data?.categories ?? [];
+        setCategoriesList(list);
+      })
+      .catch((err) => console.error("Failed to load categories:", err));
+  }, []);
+
+  // โหลดบทความจาก API เมื่อเป็นโหมดแก้ไข
+  useEffect(() => {
+    if (!isEditMode || !articleId) return;
+    let cancelled = false;
+    setLoadError(null);
+    setLoading(true);
+    axios
+      .get(`${API_BASE_URL}/posts/${articleId}`, { timeout: 5000 })
+      .then((res) => {
+        if (cancelled) return;
+        const p = res.data;
         setFormData({
-          thumbnail: existingArticle.thumbnail || null,
-          category: existingArticle.category || "",
-          author: existingArticle.author || "Admin User",
-          title: existingArticle.title || "",
-          introduction: existingArticle.introduction || "",
-          content: existingArticle.content || "",
-          status: existingArticle.status || "Draft",
+          thumbnail: null,
+          image: p.image || "",
+          category_id: p.category_id != null ? Number(p.category_id) : 1,
+          author: "Admin User",
+          title: p.title || "",
+          introduction: p.description || "",
+          content: p.content || "",
+          status_id: p.status_id != null ? Number(p.status_id) : STATUS_DRAFT,
         });
-        if (existingArticle.thumbnailPreview) {
-          setThumbnailPreview(existingArticle.thumbnailPreview);
+        setThumbnailPreview(p.image || null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setLoadError(err.response?.status === 404 ? "Article not found." : err.message || "Failed to load article.");
+        if (err.response?.status === 404) {
+          setTimeout(() => navigate("/dashboard"), 1500);
         }
-      } else {
-        // If article not found, redirect back
-        navigate("/dashboard");
-      }
-    }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [articleId, isEditMode, navigate]);
 
   const menuItems = [
@@ -95,10 +120,7 @@ function CreateArticle() {
     { icon: LogOut, label: "Logout", active: false, path: "/dashboard" },
   ];
 
-  // Extract unique categories from fallback posts
-  const categories = [
-    ...new Set(fallbackPosts.map((post) => post.category)),
-  ].filter(Boolean).sort();
+  const categories = categoriesList.map((c) => ({ id: c.id, label: c.name || `Category ${c.id}` }));
 
   const handleThumbnailChange = (e) => {
     const file = e.target.files[0];
@@ -117,28 +139,98 @@ function CreateArticle() {
     setThumbnailPreview(null);
   };
 
-  const handleSaveDraft = () => {
-    const articleData = {
-      ...formData,
-      status: "Draft",
-      thumbnailPreview: thumbnailPreview,
-      id: isEditMode ? parseInt(articleId) : undefined,
-    };
-    
-    saveArticle(articleData);
-    navigate(isEditMode ? "/dashboard?toast=updated" : "/dashboard?toast=draft");
+  const handleSaveDraft = async () => {
+    if (isEditMode) {
+      setSaving(true);
+      try {
+        await axios.put(
+          `${API_BASE_URL}/posts/${articleId}`,
+          {
+            title: formData.title,
+            image: formData.image || thumbnailPreview || "",
+            description: formData.introduction,
+            content: formData.content,
+            category_id: formData.category_id,
+            status_id: STATUS_DRAFT,
+          },
+          { headers: { ...getAuthHeaders(), "Content-Type": "application/json" }, timeout: 5000 }
+        );
+        navigate("/dashboard?toast=updated");
+      } catch (err) {
+        console.error(err);
+        setLoadError(err.response?.data?.message || err.message || "Failed to save.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    if (!formData.thumbnail || !(formData.thumbnail instanceof File)) {
+      setLoadError("กรุณาอัปโหลดรูปภาพ (Thumbnail)");
+      return;
+    }
+    setSaving(true);
+    setLoadError(null);
+    try {
+      const fd = buildCreateFormData(formData, STATUS_DRAFT);
+      fd.append("imageFile", formData.thumbnail);
+      await axios.post(`${API_BASE_URL}/posts`, fd, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
+      navigate("/dashboard?toast=draft");
+    } catch (err) {
+      console.error(err);
+      setLoadError(err.response?.data?.message || err.message || "Failed to create post.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handlePublish = () => {
-    const articleData = {
-      ...formData,
-      status: "Published",
-      thumbnailPreview: thumbnailPreview,
-      id: isEditMode ? parseInt(articleId) : undefined,
-    };
-    
-    saveArticle(articleData);
-    navigate(isEditMode ? "/dashboard?toast=updated" : "/dashboard?toast=published");
+  const handlePublish = async () => {
+    if (isEditMode) {
+      setSaving(true);
+      try {
+        await axios.put(
+          `${API_BASE_URL}/posts/${articleId}`,
+          {
+            title: formData.title,
+            image: formData.image || thumbnailPreview || "",
+            description: formData.introduction,
+            content: formData.content,
+            category_id: formData.category_id,
+            status_id: STATUS_PUBLISHED,
+          },
+          { headers: { ...getAuthHeaders(), "Content-Type": "application/json" }, timeout: 5000 }
+        );
+        navigate("/dashboard?toast=updated");
+      } catch (err) {
+        console.error(err);
+        setLoadError(err.response?.data?.message || err.message || "Failed to publish.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    if (!formData.thumbnail || !(formData.thumbnail instanceof File)) {
+      setLoadError("กรุณาอัปโหลดรูปภาพ (Thumbnail)");
+      return;
+    }
+    setSaving(true);
+    setLoadError(null);
+    try {
+      const fd = buildCreateFormData(formData, STATUS_PUBLISHED);
+      fd.append("imageFile", formData.thumbnail);
+      await axios.post(`${API_BASE_URL}/posts`, fd, {
+        headers: getAuthHeaders(),
+        timeout: 15000,
+      });
+      navigate("/dashboard?toast=published");
+    } catch (err) {
+      console.error(err);
+      setLoadError(err.response?.data?.message || err.message || "Failed to create post.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -214,20 +306,34 @@ function CreateArticle() {
             <div className="flex items-center gap-3">
               <Button
                 onClick={handleSaveDraft}
+                disabled={loading || saving}
                 className="bg-white hover:bg-brown-50 text-brown-600 border border-brown-300 rounded-lg px-6 py-2 h-auto shadow-sm"
               >
-                Save as draft
+                {saving ? <Loader2 className="animate-spin" size={18} /> : "Save as draft"}
               </Button>
               <Button
                 onClick={handlePublish}
+                disabled={loading || saving}
                 className="bg-brown-600 hover:bg-brown-500 text-white rounded-lg px-6 py-2 h-auto shadow-sm"
               >
-                Save and publish
+                {saving ? <Loader2 className="animate-spin" size={18} /> : "Save and publish"}
               </Button>
             </div>
           </div>
 
-          {/* Form */}
+          {loadError && (
+            <div className="mb-4 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {loadError}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="bg-white rounded-xl shadow-sm border border-brown-300 p-12 flex flex-col items-center justify-center gap-3">
+              <Loader2 className="animate-spin text-brown-400" size={32} />
+              <span className="text-brown-500">Loading article...</span>
+            </div>
+          ) : (
+          /* Form */
           <div className="bg-white rounded-xl shadow-sm border border-brown-300 p-6 space-y-6">
             {/* Thumbnail Upload */}
             <div>
@@ -277,18 +383,18 @@ function CreateArticle() {
                 Category
               </label>
               <Select
-                value={formData.category}
+                value={String(formData.category_id)}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, category: value })
+                  setFormData({ ...formData, category_id: parseInt(value, 10) })
                 }
               >
                 <SelectTrigger className="w-full bg-white border-brown-300 text-brown-600 rounded-lg">
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -367,6 +473,7 @@ function CreateArticle() {
               />
             </div>
           </div>
+          )}
         </div>
       </main>
     </div>

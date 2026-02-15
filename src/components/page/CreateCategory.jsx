@@ -10,14 +10,24 @@ import {
   KeyRound,
   LogOut,
   ArrowLeft,
+  Loader2,
 } from "lucide-react";
-import { saveCategory, getCategoryById } from "@/utils/categoryStorage";
+import axios from "axios";
+import { API_BASE_URL } from "@/api/client";
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 function CreateCategory() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = id !== undefined && id !== null;
   const [categoryName, setCategoryName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   const menuItems = [
     { icon: FileText, label: "Article Management", active: false, path: "/dashboard" },
@@ -28,35 +38,53 @@ function CreateCategory() {
     { icon: LogOut, label: "Logout", active: false, path: "/dashboard" },
   ];
 
-  // Load category data if editing
   useEffect(() => {
-    if (isEditMode && id) {
-      const existingCategory = getCategoryById(id);
-      if (existingCategory) {
-        setCategoryName(existingCategory.name || "");
-      } else {
-        // If category not found, redirect back
-        navigate("/dashboard/categories");
-      }
-    }
+    if (!isEditMode || !id) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    axios
+      .get(`${API_BASE_URL}/categories/${id}`, { timeout: 5000 })
+      .then((res) => {
+        if (cancelled) return;
+        setCategoryName(res.data?.name ?? "");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err.response?.status === 404 ? "Category not found." : err.message || "Failed to load category.");
+        if (err.response?.status === 404) setTimeout(() => navigate("/dashboard/categories"), 1500);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [id, isEditMode, navigate]);
 
-  const handleSave = () => {
-    if (!categoryName.trim()) {
-      return; // Don't save empty category
+  const handleSave = async () => {
+    if (!categoryName.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      if (isEditMode) {
+        await axios.put(
+          `${API_BASE_URL}/categories/${id}`,
+          { name: categoryName.trim() },
+          { headers: { ...getAuthHeaders(), "Content-Type": "application/json" }, timeout: 5000 }
+        );
+        navigate("/dashboard/categories?toast=updated");
+      } else {
+        await axios.post(
+          `${API_BASE_URL}/categories`,
+          { name: categoryName.trim() },
+          { headers: { ...getAuthHeaders(), "Content-Type": "application/json" }, timeout: 5000 }
+        );
+        navigate("/dashboard/categories?toast=created");
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to save category.");
+    } finally {
+      setSaving(false);
     }
-
-    const categoryData = {
-      id: isEditMode ? parseInt(id) : undefined,
-      name: categoryName.trim(),
-    };
-
-    saveCategory(categoryData);
-    navigate(
-      isEditMode
-        ? "/dashboard/categories?toast=updated"
-        : "/dashboard/categories?toast=created"
-    );
   };
 
   return (
@@ -131,14 +159,26 @@ function CreateCategory() {
             </div>
             <Button
               onClick={handleSave}
-              disabled={!categoryName.trim()}
+              disabled={!categoryName.trim() || loading || saving}
               className="bg-brown-600 hover:bg-brown-500 text-white rounded-lg px-6 py-2 h-auto shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Save
+              {saving ? <Loader2 className="animate-spin" size={18} /> : "Save"}
             </Button>
           </div>
 
-          {/* Form */}
+          {error && (
+            <div className="mb-4 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="bg-white rounded-xl shadow-sm border border-brown-300 p-12 flex flex-col items-center gap-3">
+              <Loader2 className="animate-spin text-brown-400" size={32} />
+              <span className="text-brown-500">Loading category...</span>
+            </div>
+          ) : (
+          /* Form */
           <div className="bg-white rounded-xl shadow-sm border border-brown-300 p-6">
             <div>
               <label className="block text-sm font-medium text-brown-600 mb-2">
@@ -158,6 +198,7 @@ function CreateCategory() {
               />
             </div>
           </div>
+          )}
         </div>
       </main>
     </div>

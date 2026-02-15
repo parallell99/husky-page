@@ -73,17 +73,25 @@ function ArticleSection() {
           params: { page: 1, limit: 100 }, // Get more posts for filtering
         });
         
-        // Map API response to BlogCard format
+        // ใช้เฉพาะวันที่ (ไทย พ.ศ.) เช่น 15/2/2569
+        const formatThaiDate = (dateStr) => {
+          if (!dateStr) return "";
+          const d = new Date(dateStr);
+          const day = d.getDate();
+          const month = d.getMonth() + 1;
+          const year = d.getFullYear() + 543; // พ.ศ.
+          return `${day}/${month}/${year}`;
+        };
+
+        // Map API response to BlogCard format (ใช้เฉพาะวันที่)
         const mappedPosts = data.posts.map((post) => ({
           id: post.id,
           title: post.title || "Untitled",
           image: post.image || "",
-          category: post.category || (post.category_id ? `Category ${post.category_id}` : "Uncategorized"),
+          category: post.category_name || post.category || "Uncategorized",
           description: post.description || "",
-          author: post.author || "Admin",
-          date: post.created_at 
-            ? new Date(post.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
-            : new Date().toLocaleDateString(),
+          author: post.author_name || post.author || "ผู้เขียน",
+          date: (post.date || post.created_at) ? formatThaiDate(post.date || post.created_at) : "",
         }));
         
         setPosts(mappedPosts);

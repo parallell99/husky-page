@@ -11,15 +11,18 @@ import {
   LogOut,
   MessageCircle,
   Newspaper,
+  Heart,
 } from "lucide-react";
+import { apiClient } from "@/api/client";
 
-const NOTIFICATION_TYPE = { NEW_ARTICLE: "new_article", COMMENT: "comment" };
+const NOTIFICATION_TYPE = { NEW_ARTICLE: "new_article", COMMENT: "comment", LIKE: "like" };
 
 function Notification() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [userRole, setUserRole] = useState(null);
 
   const menuItems = [
     { icon: FileText, label: "Article Management", active: false, path: "/dashboard" },
@@ -95,6 +98,8 @@ function Notification() {
         return { icon: Newspaper, label: "บทความใหม่", bgClass: "bg-green-100 text-green-700" };
       case NOTIFICATION_TYPE.COMMENT:
         return { icon: MessageCircle, label: "คอมเม้น", bgClass: "bg-amber-100 text-amber-700" };
+      case NOTIFICATION_TYPE.LIKE:
+        return { icon: Heart, label: "Like", bgClass: "bg-rose-100 text-rose-700" };
       default:
         return { icon: Bell, label: "แจ้งเตือน", bgClass: "bg-brown-200 text-brown-600" };
     }
@@ -103,14 +108,20 @@ function Notification() {
   const normalizeNotificationType = (list) => {
     if (!Array.isArray(list)) return list;
     return list.map((n) => {
-      if (n.type === NOTIFICATION_TYPE.NEW_ARTICLE || n.type === NOTIFICATION_TYPE.COMMENT) return n;
+      if (n.type === NOTIFICATION_TYPE.NEW_ARTICLE || n.type === NOTIFICATION_TYPE.COMMENT || n.type === NOTIFICATION_TYPE.LIKE) return n;
       const t = (n.text || "").toLowerCase();
-      const inferred = t.includes("คอมเม้น") || t.includes("comment") ? NOTIFICATION_TYPE.COMMENT
+      const inferred = t.includes("like") ? NOTIFICATION_TYPE.LIKE
+        : t.includes("คอมเม้น") || t.includes("comment") ? NOTIFICATION_TYPE.COMMENT
         : t.includes("บทความใหม่") || t.includes("new article") || t.includes("published") ? NOTIFICATION_TYPE.NEW_ARTICLE
         : null;
       return { ...n, type: n.type || inferred };
     });
   };
+
+  // admin เห็นเฉพาะแจ้งเตือน comment และ like
+  const displayNotifications = userRole === "admin"
+    ? notifications.filter((n) => n.type === NOTIFICATION_TYPE.COMMENT || n.type === NOTIFICATION_TYPE.LIKE)
+    : notifications;
 
   const loadNotifications = () => {
     const stored = localStorage.getItem("notifications");
@@ -228,12 +239,17 @@ function Notification() {
     }
   };
 
-  // Load notifications on mount
+  // โหลด role ของ user (admin จะเห็นเฉพาะ comment + like)
   useEffect(() => {
-    // Set notifications from storage/fallback immediately for instant display
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    apiClient.get("/auth/get-user").then((res) => {
+      setUserRole(res.data?.role || null);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     setNotifications(loadNotifications());
-    
-    // Fetch from API in background (silently, without showing error)
     fetchNotifications(false);
   }, []);
 
@@ -330,7 +346,7 @@ function Notification() {
 
           {/* Notification List */}
           <div className="bg-white rounded-xl shadow-sm border border-brown-300 overflow-hidden">
-            {notifications.length === 0 ? (
+            {displayNotifications.length === 0 ? (
               <div className="px-6 py-12 text-center">
                 <span className="text-sm text-brown-400">
                   No notifications found.
@@ -338,7 +354,7 @@ function Notification() {
               </div>
             ) : (
               <div className="divide-y divide-brown-300">
-                {notifications.map((notification) => {
+                {displayNotifications.map((notification) => {
                   const typeDisplay = getNotificationTypeDisplay(notification.type);
                   const TypeIcon = typeDisplay.icon;
                   return (
