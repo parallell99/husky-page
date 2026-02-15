@@ -83,7 +83,7 @@ function ArticleSection() {
           return `${day}/${month}/${year}`;
         };
 
-        // Map API response to BlogCard format (ใช้เฉพาะวันที่)
+        // Map API response to BlogCard format (รูปคนโพสต์ใช้ของจริงจาก profile_pic)
         const mappedPosts = data.posts.map((post) => ({
           id: post.id,
           title: post.title || "Untitled",
@@ -91,6 +91,7 @@ function ArticleSection() {
           category: post.category_name || post.category || "Uncategorized",
           description: post.description || "",
           author: post.author_name || post.author || "ผู้เขียน",
+          authorProfilePic: post.author_profile_pic || null,
           date: (post.date || post.created_at) ? formatThaiDate(post.date || post.created_at) : "",
         }));
         
@@ -227,6 +228,7 @@ function ArticleSection() {
               title={post.title}
               description={post.description}
               author={post.author}
+              authorProfilePic={post.authorProfilePic}
               date={post.date}
             />
           ))}

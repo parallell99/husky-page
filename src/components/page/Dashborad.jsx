@@ -218,10 +218,13 @@ function Dashboard() {
     <div className="flex h-screen bg-brown-100 font-poppins">
       {/* Left Sidebar */}
       <aside className="w-64 bg-white border-r border-brown-300 flex flex-col shadow-sm">
-        {/* Logo */}
+        {/* Logo - คลิกไปหน้า Home */}
         <div
-          className="p-6 border-b border-brown-300 bg-brown-200 cursor-pointer"
+          role="button"
+          tabIndex={0}
           onClick={() => navigate("/")}
+          onKeyDown={(e) => e.key === "Enter" && navigate("/")}
+          className="p-6 border-b border-brown-300 bg-brown-200 cursor-pointer hover:opacity-90"
         >
           <div className="flex items-center gap-2 mb-2">
             <span className="text-2xl font-semibold text-brown-600">hh</span>

@@ -11,8 +11,8 @@ import {
   LogOut,
   Upload,
   X,
-  Camera,
 } from "lucide-react";
+import { apiClient } from "@/api/client";
 
 function Profile() {
   const navigate = useNavigate();
@@ -23,9 +23,14 @@ function Profile() {
     email: "",
     bio: "",
   });
+  const [role, setRole] = useState("");
   const [profileImage, setProfileImage] = useState(null);
   const [profileImagePreview, setProfileImagePreview] = useState(null);
+  const [profileImageFile, setProfileImageFile] = useState(null);
   const [showToast, setShowToast] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const MAX_BIO_LENGTH = 120;
 
   const menuItems = [
@@ -37,34 +42,42 @@ function Profile() {
     { icon: LogOut, label: "Logout", active: false, path: "/dashboard" },
   ];
 
-  // Load profile data from localStorage
+  // โหลดข้อมูลโปรไฟล์จริงจาก API (รวม role admin)
   useEffect(() => {
-    const storedProfile = localStorage.getItem("user_profile");
-    if (storedProfile) {
-      try {
-        const profile = JSON.parse(storedProfile);
-        setFormData({
-          name: profile.name || "",
-          username: profile.username || "",
-          email: profile.email || "",
-          bio: profile.bio || "",
-        });
-        if (profile.profileImage) {
-          setProfileImagePreview(profile.profileImage);
-        }
-      } catch (error) {
-        console.error("Error loading profile:", error);
-      }
-    } else {
-      // Set default values
-      setFormData({
-        name: "Admin User",
-        username: "admin",
-        email: "admin@example.com",
-        bio: "",
-      });
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/admin-login");
+      return;
     }
-  }, []);
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const { data } = await apiClient.get("/auth/get-user");
+        setFormData({
+          name: data.name || "",
+          username: data.username || "",
+          email: data.email || "",
+          bio: "",
+        });
+        setRole(data.role || "");
+        if (data.profilePic) {
+          setProfileImagePreview(data.profilePic);
+        }
+      } catch (err) {
+        console.error("Error loading profile:", err);
+        setError(err.response?.data?.error || err.message || "โหลดโปรไฟล์ไม่สำเร็จ");
+        if (err.response?.status === 401) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("isLoggedIn");
+          navigate("/admin-login");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, [navigate]);
 
   // Check for toast notification from URL params
   useEffect(() => {
@@ -81,38 +94,71 @@ function Profile() {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      setProfileImage(file);
+      const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+      if (!allowedTypes.includes(file.type)) {
+        setError("กรุณาเลือกไฟล์รูปภาพ (JPEG, PNG, GIF, WebP)");
+        return;
+      }
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        setError("ขนาดไฟล์ไม่เกิน 5MB");
+        return;
+      }
+      setProfileImageFile(file);
+      setError("");
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileImagePreview(reader.result);
-      };
+      reader.onloadend = () => setProfileImagePreview(reader.result);
       reader.readAsDataURL(file);
     }
   };
 
   const removeImage = () => {
-    setProfileImage(null);
+    setProfileImageFile(null);
     setProfileImagePreview(null);
   };
 
-  const handleSave = () => {
-    // Save profile to localStorage
-    const profileData = {
-      ...formData,
-      profileImage: profileImagePreview,
-    };
-    localStorage.setItem("user_profile", JSON.stringify(profileData));
-    
-    // Show toast and navigate
-    navigate("/dashboard/profile?toast=saved");
+  const handleSave = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/admin-login");
+      return;
+    }
+    try {
+      setSaving(true);
+      setError("");
+      const form = new FormData();
+      form.append("name", formData.name);
+      form.append("username", formData.username);
+      if (profileImageFile) {
+        form.append("profileImage", profileImageFile);
+      }
+      const { data } = await apiClient.put("/users/profile", form);
+      const newPic = data.user?.profilePic ?? profileImagePreview;
+      setProfileImagePreview(newPic);
+      setProfileImageFile(null);
+      setShowToast(true);
+      setSearchParams({ toast: "saved" });
+      setTimeout(() => setShowToast(false), 5000);
+    } catch (err) {
+      const res = err.response?.data;
+      setError(res?.error || res?.message || err.message || "บันทึกไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="flex h-screen bg-brown-100 font-poppins">
       {/* Left Sidebar */}
       <aside className="w-64 bg-white border-r border-brown-300 flex flex-col shadow-sm">
-        {/* Logo */}
-        <div className="p-6 border-b border-brown-300 bg-brown-200">
+        {/* Logo - คลิกไปหน้า Home */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate("/")}
+          onKeyDown={(e) => e.key === "Enter" && navigate("/")}
+          className="p-6 border-b border-brown-300 bg-brown-200 cursor-pointer hover:opacity-90"
+        >
           <div className="flex items-center gap-2 mb-2">
             <span className="text-2xl font-semibold text-brown-600">hh</span>
             <span className="text-2xl font-semibold text-green">.</span>
@@ -168,8 +214,19 @@ function Profile() {
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto bg-brown-100">
         <div className="p-8 w-full mx-auto">
+          {loading ? (
+            <div className="bg-white rounded-xl shadow-sm border border-brown-300 p-8 text-center">
+              <p className="text-brown-600">กำลังโหลดโปรไฟล์...</p>
+            </div>
+          ) : (
+          <>
           {/* Profile Card */}
           <div className="bg-white rounded-xl shadow-sm border border-brown-300 p-6">
+            {error && (
+              <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                {error}
+              </div>
+            )}
             {/* Header with Save Button */}
             <div className="flex items-center justify-between mb-6">
               <h1 className="text-2xl font-semibold text-brown-600">
@@ -177,9 +234,10 @@ function Profile() {
               </h1>
               <Button
                 onClick={handleSave}
-                className="bg-brown-600 hover:bg-brown-500 text-white rounded-lg px-6 py-2 h-auto shadow-sm"
+                disabled={saving}
+                className="bg-brown-600 hover:bg-brown-500 text-white rounded-lg px-6 py-2 h-auto shadow-sm disabled:opacity-60"
               >
-                Save
+                {saving ? "กำลังบันทึก..." : "Save"}
               </Button>
             </div>
 
@@ -260,7 +318,7 @@ function Profile() {
                 />
               </div>
 
-              {/* Email */}
+              {/* Email (read-only จากระบบ) */}
               <div>
                 <label className="block text-sm font-medium text-brown-600 mb-2">
                   Email
@@ -269,10 +327,21 @@ function Profile() {
                   type="email"
                   placeholder="Enter your email..."
                   value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  className="w-full bg-white border-brown-300 text-brown-600 placeholder:text-brown-400 rounded-lg"
+                  readOnly
+                  className="w-full bg-brown-100 border-brown-300 text-brown-600 rounded-lg cursor-not-allowed"
+                />
+              </div>
+
+              {/* Role (ข้อมูลจริงจาก DB เช่น admin) */}
+              <div>
+                <label className="block text-sm font-medium text-brown-600 mb-2">
+                  Role
+                </label>
+                <Input
+                  type="text"
+                  value={role ? role.charAt(0).toUpperCase() + role.slice(1) : ""}
+                  readOnly
+                  className="w-full bg-brown-100 border-brown-300 text-brown-600 rounded-lg cursor-not-allowed capitalize"
                 />
               </div>
 
@@ -306,6 +375,8 @@ function Profile() {
               </div>
             </div>
           </div>
+          </>
+          )}
         </div>
       </main>
 

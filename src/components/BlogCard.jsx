@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 export function BlogCard(props) {
-  const { id, image, category, title, description, author, date } = props;
+  const { id, image, category, title, description, author, authorProfilePic, date } = props;
   return (
     <div className="flex flex-col gap-4 py-3">
       <Link to={`/post/${id}`} className="relative h-[212px] sm:h-[360px]">
@@ -26,11 +26,17 @@ export function BlogCard(props) {
           {description}
         </p>
         <div className="flex flex-wrap items-center text-sm">
-          <img
-            className="w-8 h-8 rounded-full mr-2"
-            src="https://res.cloudinary.com/dcbpjtd1r/image/upload/v1728449784/my-blog-post/xgfy0xnvyemkklcqodkg.jpg"
-            alt="Tomson P."
-          />
+          {authorProfilePic ? (
+            <img
+              className="w-8 h-8 rounded-full mr-2 object-cover"
+              src={authorProfilePic}
+              alt={author}
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full mr-2 bg-brown-200 flex items-center justify-center text-brown-600 text-xs font-medium shrink-0">
+              {author ? author.charAt(0).toUpperCase() : "?"}
+            </div>
+          )}
           <span>{author}</span>
           <span className="mx-2 text-gray-300">|</span>
           <span>{date}</span>
