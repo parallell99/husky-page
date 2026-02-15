@@ -45,6 +45,13 @@ function Dashboard() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("isLoggedIn");
+    window.dispatchEvent(new Event("loginChange"));
+    navigate("/");
+  };
+
   // Check for toast notification from URL params and refresh articles from API
   useEffect(() => {
     const toast = searchParams.get("toast");
@@ -241,7 +248,7 @@ function Dashboard() {
               return (
                 <button
                   key={index}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"
@@ -262,7 +269,7 @@ function Dashboard() {
               return (
                 <button
                   key={index + 5}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"

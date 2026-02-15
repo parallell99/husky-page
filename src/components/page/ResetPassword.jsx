@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,13 +13,7 @@ import {
   EyeOff,
   Loader2,
 } from "lucide-react";
-import axios from "axios";
-import { API_BASE_URL } from "@/api/client";
-
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+import { apiClient } from "@/api/client";
 
 function ResetPassword() {
   const navigate = useNavigate();
@@ -38,14 +32,27 @@ function ResetPassword() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
+  useEffect(() => {
+    if (!localStorage.getItem("token")) {
+      navigate("/admin-login");
+    }
+  }, [navigate]);
+
   const menuItems = [
     { icon: FileText, label: "Article Management", active: false, path: "/dashboard" },
     { icon: FolderOpen, label: "Category Management", active: false, path: "/dashboard/categories" },
     { icon: User, label: "Profile", active: false, path: "/dashboard/profile" },
     { icon: Bell, label: "Notification", active: false, path: "/dashboard/notification" },
     { icon: KeyRound, label: "Reset Password", active: true, path: "/dashboard/reset-password" },
-    { icon: LogOut, label: "Logout", active: false, path: "/dashboard" },
+    { icon: LogOut, label: "Logout", active: false, path: "/" },
   ];
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("isLoggedIn");
+    window.dispatchEvent(new Event("loginChange"));
+    navigate("/");
+  };
 
   const handleResetClick = () => {
     if (formData.newPassword !== formData.confirmPassword) return;
@@ -68,14 +75,10 @@ function ResetPassword() {
     setLoading(true);
     setError(null);
     try {
-      await axios.put(
-        `${API_BASE_URL}/auth/reset-password`,
-        { oldPassword: currentP, newPassword: newP },
-        {
-          headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
-          timeout: 10000,
-        }
-      );
+      await apiClient.put("/auth/reset-password", {
+        oldPassword: currentP,
+        newPassword: newP,
+      });
       setFormData({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setShowConfirmModal(false);
       setSuccess(true);
@@ -133,7 +136,7 @@ function ResetPassword() {
               return (
                 <button
                   key={index}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"
@@ -154,7 +157,7 @@ function ResetPassword() {
               return (
                 <button
                   key={index + 5}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"

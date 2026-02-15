@@ -117,8 +117,15 @@ function CreateArticle() {
     { icon: User, label: "Profile", active: false, path: "/dashboard/profile" },
     { icon: Bell, label: "Notification", active: false, path: "/dashboard/notification" },
     { icon: KeyRound, label: "Reset Password", active: false, path: "/dashboard/reset-password" },
-    { icon: LogOut, label: "Logout", active: false, path: "/dashboard" },
+    { icon: LogOut, label: "Logout", active: false, path: "/" },
   ];
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("isLoggedIn");
+    window.dispatchEvent(new Event("loginChange"));
+    navigate("/");
+  };
 
   const categories = categoriesList.map((c) => ({ id: c.id, label: c.name || `Category ${c.id}` }));
 
@@ -260,7 +267,7 @@ function CreateArticle() {
               return (
                 <button
                   key={index}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors hover:bg-brown-300 ${
                     item.active ? "bg-brown-300 text-brown-600" : "text-brown-400"
                   }`}
@@ -279,7 +286,7 @@ function CreateArticle() {
               return (
                 <button
                   key={index + 5}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors hover:bg-brown-300 ${
                     item.active ? "bg-brown-300 text-brown-600" : "text-brown-400"
                   }`}

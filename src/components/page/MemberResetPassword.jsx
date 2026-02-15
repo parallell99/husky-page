@@ -2,13 +2,7 @@ import Navbar from "../Navbar";
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, User, RotateCcw, Loader2 } from "lucide-react";
-import axios from "axios";
-import { API_BASE_URL } from "@/api/client";
-
-const getAuthHeaders = () => {
-    const token = localStorage.getItem("token");
-    return token ? { Authorization: `Bearer ${token}` } : {};
-};
+import { apiClient } from "@/api/client";
 
 function MemberResetPassword() {
     const location = useLocation();
@@ -37,15 +31,16 @@ function MemberResetPassword() {
         confirmPassword: ""
     });
 
-    // โหลดข้อมูล user จริงจาก API
+    // โหลดข้อมูล user จริงจาก API (ต้อง login ถึงเข้าได้)
     useEffect(() => {
         const token = localStorage.getItem("token");
         if (!token) {
             setProfileLoading(false);
+            navigate("/login", { replace: true });
             return;
         }
-        axios
-            .get(`${API_BASE_URL}/auth/get-user`, { headers: getAuthHeaders(), timeout: 5000 })
+        apiClient
+            .get("/auth/get-user")
             .then((res) => {
                 const u = res.data?.user ?? res.data;
                 setUserProfile({
@@ -55,7 +50,13 @@ function MemberResetPassword() {
                     profileImage: u?.profilePic ?? u?.profile_pic ?? null,
                 });
             })
-            .catch(() => {
+            .catch((err) => {
+                if (err.response?.status === 401) {
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("isLoggedIn");
+                    navigate("/login", { replace: true });
+                    return;
+                }
                 const stored = localStorage.getItem("user_profile");
                 if (stored) {
                     try {
@@ -70,7 +71,7 @@ function MemberResetPassword() {
                 }
             })
             .finally(() => setProfileLoading(false));
-    }, []);
+    }, [navigate]);
 
     const getUserDisplayName = () => {
         return userProfile?.name || userProfile?.username || "User";
@@ -120,17 +121,10 @@ function MemberResetPassword() {
         setResetLoading(true);
         setResetError("");
         try {
-            await axios.put(
-                `${API_BASE_URL}/auth/reset-password`,
-                {
-                    oldPassword: currentPassword,
-                    newPassword: newPassword,
-                },
-                {
-                    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
-                    timeout: 10000,
-                }
-            );
+            await apiClient.put("/auth/reset-password", {
+                oldPassword: currentPassword.trim(),
+                newPassword: newPassword.trim(),
+            });
             setCurrentPassword("");
             setNewPassword("");
             setConfirmPassword("");
@@ -143,6 +137,9 @@ function MemberResetPassword() {
             if (err.response?.status === 401) {
                 setTimeout(() => {
                     setShowConfirmPopup(false);
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("isLoggedIn");
+                    window.dispatchEvent(new Event("loginChange"));
                     navigate("/login");
                 }, 1500);
             }

@@ -113,6 +113,13 @@ function CategoryManagement() {
     setDeleteConfirmId(null);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("isLoggedIn");
+    window.dispatchEvent(new Event("loginChange"));
+    navigate("/");
+  };
+
   // Filter categories based on search
   const filteredCategories = categories.filter((category) => {
     const categoryName = category.name || category;
@@ -149,7 +156,7 @@ function CategoryManagement() {
               return (
                 <button
                   key={index}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"
@@ -170,7 +177,7 @@ function CategoryManagement() {
               return (
                 <button
                   key={index + 5}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"

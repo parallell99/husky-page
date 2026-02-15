@@ -13,6 +13,9 @@ function Navbar() {
   const dropdownRef = useRef(null);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [notificationsReadAt, setNotificationsReadAt] = useState(() =>
+    localStorage.getItem("notifications_read_at")
+  );
   const notificationDropdownRef = useRef(null);
 
   // Fetch user profile from Supabase API
@@ -96,13 +99,18 @@ function Navbar() {
     const handleNotificationUpdate = () => {
       setNotifications(loadNotifications());
     };
+    const handleNotificationRead = () => {
+      setNotificationsReadAt(localStorage.getItem("notifications_read_at"));
+    };
 
     window.addEventListener("storage", handleStorageChange);
     window.addEventListener("notificationUpdate", handleNotificationUpdate);
+    window.addEventListener("notificationRead", handleNotificationRead);
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("notificationUpdate", handleNotificationUpdate);
+      window.removeEventListener("notificationRead", handleNotificationRead);
     };
   }, []);
 
@@ -222,11 +230,20 @@ function Navbar() {
       ? notifications.filter((n) => n.type === "comment" || n.type === "like")
       : notifications;
 
+  // นับเฉพาะที่ยังไม่อ่าน (สร้างหลังเวลาที่เปิดหน้า Notification ล่าสุด)
+  const unreadCount = (() => {
+    const readAt = notificationsReadAt ? parseInt(notificationsReadAt, 10) : 0;
+    if (!readAt) return notificationsToShow.length;
+    return notificationsToShow.filter((n) => {
+      const created = n.created_at ? new Date(n.created_at).getTime() : 0;
+      return created > readAt;
+    }).length;
+  })();
+
   const getNotificationCountDisplay = () => {
-    const count = notificationsToShow.length;
-    if (count <= 0) return null;
-    if (count > 99) return "99+";
-    return count.toString();
+    if (unreadCount <= 0) return null;
+    if (unreadCount > 99) return "99+";
+    return unreadCount.toString();
   };
 
   const getRelativeTime = (hoursAgo) => {
@@ -245,8 +262,11 @@ function Navbar() {
   const handleNotificationClick = (notification) => {
     setShowNotificationDropdown(false);
     setIsOpen(false);
-    if (notification.postId) {
-      navigate(`/post/${notification.postId}#comments`);
+    const postId = notification.postId ?? notification.post_id;
+    if (postId) {
+      navigate(`/post/${postId}#comments`);
+    } else {
+      navigate("/dashboard/notification");
     }
   };
 
@@ -263,23 +283,35 @@ function Navbar() {
         {/* Desktop Menu - Conditional Rendering */}
         {isLoggedIn ? (
           <div className="hidden lg:flex gap-4 items-center">
-            {/* Notification Icon with Dropdown */}
+            {/* Notification - Admin ลิงก์ไปหน้าแจ้งเตือน */}
             <div className="relative" ref={notificationDropdownRef}>
-              <button
-                onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
-                className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors "
-              >
-                <Bell size={20} />
-                {/* Notification count badge */}
-                {notificationsToShow.length > 0 && (
-                  <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
-                    {getNotificationCountDisplay()}
-                  </span>
-                )}
-              </button>
-
-              {/* Notification Dropdown */}
-              {showNotificationDropdown && (
+              {userProfile?.role === "admin" ? (
+                <Link
+                  to="/dashboard/notification"
+                  className="relative inline-flex p-2 text-brown-600 hover:text-brown-800 transition-colors"
+                >
+                  <Bell size={20} />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
+                      {getNotificationCountDisplay()}
+                    </span>
+                  )}
+                </Link>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                    className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors"
+                  >
+                    <Bell size={20} />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
+                        {getNotificationCountDisplay()}
+                      </span>
+                    )}
+                  </button>
+                  {/* Notification Dropdown (สำหรับ non-admin) */}
+                  {showNotificationDropdown && (
                 <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
                   {notificationsToShow.length === 0 ? (
                     <div className="px-4 py-6 text-center">
@@ -322,6 +354,8 @@ function Navbar() {
                     </div>
                   )}
                 </div>
+              )}
+                </>
               )}
             </div>
 
@@ -416,21 +450,32 @@ function Navbar() {
           {/* Notification Icon - Mobile */}
           {isLoggedIn && (
             <div className="relative" ref={notificationDropdownRef}>
-              <button
-                onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
-                className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors max-lg:hidden"
-              >
-                <Bell size={18} />
-                {/* Notification count badge */}
-                {notificationsToShow.length > 0 && (
-                  <span className="absolute top-0 right-0 min-w-[16px] h-[16px] bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center px-0.5">
-                    {getNotificationCountDisplay()}
-                  </span>
-                )}
-              </button>
-
-              {/* Notification Dropdown - Mobile */}
-              {showNotificationDropdown && (
+              {userProfile?.role === "admin" ? (
+                <Link
+                  to="/dashboard/notification"
+                  className="relative inline-flex p-2 text-brown-600 hover:text-brown-800 transition-colors"
+                >
+                  <Bell size={18} />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-0 right-0 min-w-[16px] h-[16px] bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center px-0.5">
+                      {getNotificationCountDisplay()}
+                    </span>
+                  )}
+                </Link>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                    className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors"
+                  >
+                    <Bell size={18} />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-0 right-0 min-w-[16px] h-[16px] bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center px-0.5">
+                        {getNotificationCountDisplay()}
+                      </span>
+                    )}
+                  </button>
+                  {showNotificationDropdown && (
                 <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
                   {notificationsToShow.length === 0 ? (
                     <div className="px-4 py-6 text-center">
@@ -473,6 +518,8 @@ function Navbar() {
                     </div>
                   )}
                 </div>
+              )}
+                </>
               )}
             </div>
           )}
@@ -522,21 +569,33 @@ function Navbar() {
                       
                       {/* Notification Bell */}
                       <div className="relative" ref={notificationDropdownRef}>
-                        <button
-                          onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
-                          className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors"
-                        >
-                          <Bell size={20} />
-                          {/* Notification count badge */}
-                          {notificationsToShow.length > 0 && (
-                            <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
-                              {getNotificationCountDisplay()}
-                            </span>
-                          )}
-                        </button>
-
-                        {/* Notification Dropdown - Mobile Hamburger Menu */}
-                        {showNotificationDropdown && (
+                        {userProfile?.role === "admin" ? (
+                          <Link
+                            to="/dashboard/notification"
+                            onClick={() => setIsOpen(false)}
+                            className="relative inline-flex p-2 text-brown-600 hover:text-brown-800 transition-colors"
+                          >
+                            <Bell size={20} />
+                            {unreadCount > 0 && (
+                              <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
+                                {getNotificationCountDisplay()}
+                              </span>
+                            )}
+                          </Link>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                              className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors"
+                            >
+                              <Bell size={20} />
+                              {unreadCount > 0 && (
+                                <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
+                                  {getNotificationCountDisplay()}
+                                </span>
+                              )}
+                            </button>
+                            {showNotificationDropdown && (
                           <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
                             {notificationsToShow.length === 0 ? (
                               <div className="px-4 py-6 text-center">
@@ -579,6 +638,8 @@ function Navbar() {
                               </div>
                             )}
                           </div>
+                        )}
+                            </>
                         )}
                       </div>
                     </div>

@@ -118,10 +118,24 @@ function Notification() {
     });
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("isLoggedIn");
+    window.dispatchEvent(new Event("loginChange"));
+    navigate("/");
+  };
+
   // admin เห็นเฉพาะแจ้งเตือน comment และ like
   const displayNotifications = userRole === "admin"
     ? notifications.filter((n) => n.type === NOTIFICATION_TYPE.COMMENT || n.type === NOTIFICATION_TYPE.LIKE)
     : notifications;
+
+  // เมื่อเปิดหน้านี้ = อ่านแล้ว → บันทึกเวลาอ่าน เพื่อให้ Navbar ซ่อนเลขแจ้งเตือน
+  useEffect(() => {
+    const readAt = Date.now().toString();
+    localStorage.setItem("notifications_read_at", readAt);
+    window.dispatchEvent(new Event("notificationRead"));
+  }, []);
 
   const loadNotifications = () => {
     const stored = localStorage.getItem("notifications");
@@ -203,6 +217,7 @@ function Notification() {
           text,
           hoursAgo,
           postId,
+          created_at: timestamp || null,
         };
       });
 
@@ -253,26 +268,10 @@ function Notification() {
     fetchNotifications(false);
   }, []);
 
-  const handleView = (notificationId) => {
-    // Find the notification by ID
-    const notification = notifications.find((n) => n.id === notificationId);
-    
-    if (!notification) {
-      console.error("Notification not found:", notificationId);
-      return;
-    }
-
-    // Extract postId from notification
-    const postId = notification.postId;
-
-    // Navigate to post detail page with comment section hash
+  const handleView = (notification) => {
+    const postId = notification.postId ?? notification.post_id;
     if (postId) {
       navigate(`/post/${postId}#comments`);
-    } else {
-      // If no postId, log and do nothing (or navigate to home)
-      console.log("Notification has no associated post:", notificationId);
-      // Optionally navigate to home or show a message
-      // navigate("/");
     }
   };
 
@@ -303,7 +302,7 @@ function Notification() {
               return (
                 <button
                   key={index}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"
@@ -324,7 +323,7 @@ function Notification() {
               return (
                 <button
                   key={index + 5}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"
@@ -363,10 +362,15 @@ function Notification() {
                 {displayNotifications.map((notification) => {
                   const typeDisplay = getNotificationTypeDisplay(notification.type);
                   const TypeIcon = typeDisplay.icon;
+                  const hasPost = !!(notification.postId ?? notification.post_id);
                   return (
                     <div
                       key={notification.id}
-                      className="px-6 py-4 hover:bg-brown-50 transition-colors flex items-center gap-4"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => hasPost && handleView(notification)}
+                      onKeyDown={(e) => hasPost && (e.key === "Enter" || e.key === " ") && handleView(notification)}
+                      className={`px-6 py-4 hover:bg-brown-50 transition-colors flex items-center gap-4 ${hasPost ? "cursor-pointer" : ""}`}
                     >
                       <div className="shrink-0 flex flex-col items-center gap-1">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${typeDisplay.bgClass}`}>
@@ -385,14 +389,13 @@ function Notification() {
                         <p className="text-sm font-medium text-brown-600">{notification.text}</p>
                         <p className="text-xs text-orange mt-1">{getRelativeTime(notification.hoursAgo)}</p>
                       </div>
-                      <div className="shrink-0">
-                        <button
-                          onClick={() => handleView(notification.id)}
-                          className="text-sm font-medium text-brown-600 hover:text-brown-800 transition-colors hover:underline cursor-pointer"
-                        >
-                          View
-                        </button>
-                      </div>
+                      {hasPost && (
+                        <div className="shrink-0">
+                          <span className="text-sm font-medium text-brown-600 hover:text-brown-800 transition-colors hover:underline">
+                            View
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

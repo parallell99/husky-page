@@ -39,8 +39,15 @@ function Profile() {
     { icon: User, label: "Profile", active: true, path: "/dashboard/profile" },
     { icon: Bell, label: "Notification", active: false, path: "/dashboard/notification" },
     { icon: KeyRound, label: "Reset Password", active: false, path: "/dashboard/reset-password" },
-    { icon: LogOut, label: "Logout", active: false, path: "/dashboard" },
+    { icon: LogOut, label: "Logout", active: false, path: "/" },
   ];
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("isLoggedIn");
+    window.dispatchEvent(new Event("loginChange"));
+    navigate("/");
+  };
 
   // โหลดข้อมูลโปรไฟล์จริงจาก API (รวม role admin)
   useEffect(() => {
@@ -174,7 +181,7 @@ function Profile() {
               return (
                 <button
                   key={index}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"
@@ -195,7 +202,7 @@ function Profile() {
               return (
                 <button
                   key={index + 5}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"
