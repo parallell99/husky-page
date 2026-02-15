@@ -22,8 +22,10 @@ function MemberPage() {
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
     const [profileImage, setProfileImage] = useState(null);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
 
-    // Load user profile from Supabase API
+    // Load user profile from API
     useEffect(() => {
         const fetchUserProfile = async () => {
             const token = localStorage.getItem("token");
@@ -37,8 +39,6 @@ function MemberPage() {
             try {
                 setLoading(true);
                 const { data } = await apiClient.get("/auth/get-user");
-                console.log("User profile loaded:", data);
-                
                 setUserProfile({
                     name: data.name || "",
                     username: data.username || "",
@@ -71,10 +71,20 @@ function MemberPage() {
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
         if (file) {
+            const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+            if (!allowedTypes.includes(file.type)) {
+                setError("กรุณาเลือกไฟล์รูปภาพ (JPEG, PNG, GIF, WebP)");
+                return;
+            }
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (file.size > maxSize) {
+                setError("ขนาดไฟล์ไม่เกิน 5MB");
+                return;
+            }
+            setSelectedFile(file);
+            setError("");
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setProfileImage(reader.result);
-            };
+            reader.onloadend = () => setProfileImage(reader.result);
             reader.readAsDataURL(file);
         }
     };
@@ -89,28 +99,39 @@ function MemberPage() {
         }
 
         try {
-            // TODO: Add API endpoint for updating profile (name, username, profilePic)
-            // For now, just show success message
-            console.log("Saving profile:", { name, username, email });
-            
-            // Update local state
+            setError("");
+            setUploading(true);
+
+            const formData = new FormData();
+            formData.append("name", name);
+            formData.append("username", username);
+            if (selectedFile) {
+                formData.append("profileImage", selectedFile);
+            } else if (profileImage && typeof profileImage === "string" && profileImage.startsWith("http")) {
+                formData.append("profilePic", profileImage);
+            }
+
+            const { data } = await apiClient.put("/users/profile", formData);
+
+            const newProfilePic = data.user?.profilePic ?? profileImage;
             setUserProfile({
                 ...userProfile,
                 name,
                 username,
-                profilePic: profileImage,
+                profilePic: newProfilePic,
             });
-            
-            // Show saved popup
+            setProfileImage(newProfilePic);
+            setSelectedFile(null);
+
             setShowSavedPopup(true);
-            
-            // Hide popup after 2 seconds
-            setTimeout(() => {
-                setShowSavedPopup(false);
-            }, 2000);
+            setTimeout(() => setShowSavedPopup(false), 2000);
         } catch (err) {
-            console.error("Error saving profile:", err);
-            setError(err.response?.data?.error || "Failed to save profile");
+            const data = err.response?.data;
+            let msg = data?.error || data?.message || err.message || "Failed to save profile";
+            if (data?.hint) msg += "\n\n" + data.hint;
+            setError(msg);
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -300,9 +321,10 @@ function MemberPage() {
                         {/* Save Button */}
                         <button
                             type="submit"
-                            className="w-full bg-brown-600 hover:bg-brown-700 text-white font-medium py-3 px-6 rounded-full text-sm transition-colors shadow-md mt-8"
+                            disabled={uploading}
+                            className="w-full bg-brown-600 hover:bg-brown-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-full text-sm transition-colors shadow-md mt-8"
                         >
-                            Save
+                            {uploading ? "กำลังบันทึก..." : "Save"}
                         </button>
                     </form>
                     </div>
