@@ -9,7 +9,11 @@ import {
   Bell,
   KeyRound,
   LogOut,
+  MessageCircle,
+  Newspaper,
 } from "lucide-react";
+
+const NOTIFICATION_TYPE = { NEW_ARTICLE: "new_article", COMMENT: "comment" };
 
 function Notification() {
   const navigate = useNavigate();
@@ -78,61 +82,42 @@ function Notification() {
     }
   };
 
-  const getDefaultNotifications = () => {
-    return [
-      {
-        id: 1,
-        avatar: null,
-        text: "User commented on your article 'The Art of Mindfulness'",
-        hoursAgo: 2,
-        postId: 1, // Default post ID for testing
-      },
-      {
-        id: 2,
-        avatar: null,
-        text: "New follower: John Doe started following you",
-        hoursAgo: 4,
-        postId: null, // No associated post
-      },
-      {
-        id: 3,
-        avatar: null,
-        text: "Your article 'Cat Nutrition Guide' was published",
-        hoursAgo: 6,
-        postId: 2, // Default post ID for testing
-      },
-      {
-        id: 4,
-        avatar: null,
-        text: "User liked your article 'The Power of Habits'",
-        hoursAgo: 12,
-        postId: 3, // Default post ID for testing
-      },
-      {
-        id: 5,
-        avatar: null,
-        text: "Comment reply: Sarah replied to your comment",
-        hoursAgo: 18,
-        postId: 1, // Default post ID for testing
-      },
-      {
-        id: 6,
-        avatar: null,
-        text: "Your draft 'Future of Work' was auto-saved",
-        hoursAgo: 24,
-        postId: null, // No associated post
-      },
-    ];
+  const getDefaultNotifications = () => [
+    { id: 1, type: NOTIFICATION_TYPE.NEW_ARTICLE, text: "มีบทความใหม่: The Art of Mindfulness", hoursAgo: 1, postId: 1 },
+    { id: 2, type: NOTIFICATION_TYPE.COMMENT, text: "มีคนคอมเม้นในบทความ 'The Art of Mindfulness'", hoursAgo: 2, postId: 1 },
+    { id: 3, type: NOTIFICATION_TYPE.NEW_ARTICLE, text: "มีบทความใหม่: Cat Nutrition Guide", hoursAgo: 5, postId: 2 },
+    { id: 4, type: NOTIFICATION_TYPE.COMMENT, text: "มีคนคอมเม้นในบทความ 'Cat Nutrition Guide'", hoursAgo: 8, postId: 2 },
+  ];
+
+  const getNotificationTypeDisplay = (type) => {
+    switch (type) {
+      case NOTIFICATION_TYPE.NEW_ARTICLE:
+        return { icon: Newspaper, label: "บทความใหม่", bgClass: "bg-green-100 text-green-700" };
+      case NOTIFICATION_TYPE.COMMENT:
+        return { icon: MessageCircle, label: "คอมเม้น", bgClass: "bg-amber-100 text-amber-700" };
+      default:
+        return { icon: Bell, label: "แจ้งเตือน", bgClass: "bg-brown-200 text-brown-600" };
+    }
   };
 
-  // Load notifications from localStorage or use default
+  const normalizeNotificationType = (list) => {
+    if (!Array.isArray(list)) return list;
+    return list.map((n) => {
+      if (n.type === NOTIFICATION_TYPE.NEW_ARTICLE || n.type === NOTIFICATION_TYPE.COMMENT) return n;
+      const t = (n.text || "").toLowerCase();
+      const inferred = t.includes("คอมเม้น") || t.includes("comment") ? NOTIFICATION_TYPE.COMMENT
+        : t.includes("บทความใหม่") || t.includes("new article") || t.includes("published") ? NOTIFICATION_TYPE.NEW_ARTICLE
+        : null;
+      return { ...n, type: n.type || inferred };
+    });
+  };
+
   const loadNotifications = () => {
-    const storedNotifications = localStorage.getItem("notifications");
-    if (storedNotifications) {
+    const stored = localStorage.getItem("notifications");
+    if (stored) {
       try {
-        return JSON.parse(storedNotifications);
-      } catch (error) {
-        console.error("Error loading notifications:", error);
+        return normalizeNotificationType(JSON.parse(stored));
+      } catch (e) {
         return getDefaultNotifications();
       }
     }
@@ -197,30 +182,26 @@ function Notification() {
         const hoursAgo = timestamp ? convertTimestampToHoursAgo(timestamp) : 0;
 
         // Extract post/article ID from various possible fields
-        const postId = notification.postId || 
-                       notification.articleId || 
-                       notification.post_id || 
-                       notification.article_id || 
-                       notification.relatedPostId ||
-                       notification.post?.id ||
-                       notification.article?.id ||
-                       null;
+        const postId = notification.postId ?? notification.post_id ?? notification.articleId ?? notification.article_id ?? notification.relatedPostId ?? notification.post?.id ?? notification.article?.id ?? null;
+        const type = notification.type || notification.notification_type || null;
 
         return {
           id: notification.id || index + 1,
-          avatar: avatar,
-          text: text,
-          hoursAgo: hoursAgo,
-          postId: postId,
+          type,
+          avatar,
+          text,
+          hoursAgo,
+          postId,
         };
       });
 
-      if (mappedNotifications.length > 0) {
-        setNotifications(mappedNotifications);
-        setError(null); // Clear error if API succeeds
-        
-        // Save to localStorage for offline access
-        localStorage.setItem("notifications", JSON.stringify(mappedNotifications));
+      const normalized = normalizeNotificationType(mappedNotifications);
+      setNotifications(normalized);
+      setError(null);
+      if (normalized.length > 0) {
+        localStorage.setItem("notifications", JSON.stringify(normalized));
+      } else {
+        localStorage.removeItem("notifications");
       }
     } catch (err) {
       console.error("Error fetching notifications:", err);
@@ -357,47 +338,42 @@ function Notification() {
               </div>
             ) : (
               <div className="divide-y divide-brown-300">
-                {notifications.map((notification, index) => (
-                  <div
-                    key={notification.id}
-                    className="px-6 py-4 hover:bg-brown-50 transition-colors flex items-center gap-4"
-                  >
-                    {/* Avatar */}
-                    <div className="shrink-0">
-                      {notification.avatar ? (
-                        <img
-                          src={notification.avatar}
-                          alt="User"
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
-                          <User className="w-6 h-6 text-brown-400" />
+                {notifications.map((notification) => {
+                  const typeDisplay = getNotificationTypeDisplay(notification.type);
+                  const TypeIcon = typeDisplay.icon;
+                  return (
+                    <div
+                      key={notification.id}
+                      className="px-6 py-4 hover:bg-brown-50 transition-colors flex items-center gap-4"
+                    >
+                      <div className="shrink-0 flex flex-col items-center gap-1">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${typeDisplay.bgClass}`}>
+                          <TypeIcon className="w-5 h-5" />
+                        </div>
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${typeDisplay.bgClass}`}>
+                          {typeDisplay.label}
+                        </span>
+                      </div>
+                      {notification.avatar && (
+                        <div className="shrink-0">
+                          <img src={notification.avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
                         </div>
                       )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-brown-600">{notification.text}</p>
+                        <p className="text-xs text-orange mt-1">{getRelativeTime(notification.hoursAgo)}</p>
+                      </div>
+                      <div className="shrink-0">
+                        <button
+                          onClick={() => handleView(notification.id)}
+                          className="text-sm font-medium text-brown-600 hover:text-brown-800 transition-colors hover:underline cursor-pointer"
+                        >
+                          View
+                        </button>
+                      </div>
                     </div>
-
-                    {/* Notification Content */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-brown-600">
-                        {notification.text}
-                      </p>
-                      <p className="text-xs text-orange mt-1">
-                        {getRelativeTime(notification.hoursAgo)}
-                      </p>
-                    </div>
-
-                    {/* View Link */}
-                    <div className="shrink-0">
-                      <button
-                        onClick={() => handleView(notification.id)}
-                        className="text-sm font-medium text-brown-600 hover:text-brown-800 transition-colors hover:underline cursor-pointer"
-                      >
-                        View
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
