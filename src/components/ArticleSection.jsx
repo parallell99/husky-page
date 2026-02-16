@@ -21,6 +21,8 @@ import { apiClient } from "@/api/client";
 
 import { useState, useMemo, useEffect } from "react";
 
+const INITIAL_DISPLAY = 6;
+
 function ArticleSection() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [search, setSearch] = useState("");
@@ -28,6 +30,7 @@ function ArticleSection() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY);
 
   // Filter posts for search results dropdown (only by search term, ignores category)
   // Shows results immediately as user types (like Google)
@@ -115,6 +118,17 @@ function ArticleSection() {
       setSelectedSearchQuery("");
     }
   }, [search]);
+
+  // Reset display count when filter changes so user sees first 6 of new results
+  useEffect(() => {
+    setDisplayCount(INITIAL_DISPLAY);
+  }, [selectedCategory, selectedSearchQuery]);
+
+  const postsToShow = useMemo(
+    () => filteredPosts.slice(0, displayCount),
+    [filteredPosts, displayCount]
+  );
+  const hasMore = filteredPosts.length > displayCount;
 
   return (
     <>
@@ -218,21 +232,34 @@ function ArticleSection() {
           <p className="text-brown-400">No articles found.</p>
         </div>
       ) : (
-        <div className="px-3 py-3 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:px-20">
-          {filteredPosts.map((post) => (
-            <BlogCard
-              key={post.id}
-              id={post.id}
-              image={post.image}
-              category={post.category}
-              title={post.title}
-              description={post.description}
-              author={post.author}
-              authorProfilePic={post.authorProfilePic}
-              date={post.date}
-            />
-          ))}
-        </div>
+        <>
+          <div className="px-3 py-3 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:px-20">
+            {postsToShow.map((post) => (
+              <BlogCard
+                key={post.id}
+                id={post.id}
+                image={post.image}
+                category={post.category}
+                title={post.title}
+                description={post.description}
+                author={post.author}
+                authorProfilePic={post.authorProfilePic}
+                date={post.date}
+              />
+            ))}
+          </div>
+          {hasMore && (
+            <div className="flex justify-center py-8">
+              <button
+                type="button"
+                onClick={() => setDisplayCount((c) => c + INITIAL_DISPLAY)}
+                className="px-6 py-3 underline font-medium hover:cursor-pointer hover:underline transition-colors"
+              >
+                View more
+              </button>
+            </div>
+          )}
+        </>
       )}
     </>
   );
