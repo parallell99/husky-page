@@ -38,14 +38,27 @@ function AdminLogin() {
                 email: email.trim(),
                 password,
             });
-            if (data.access_token) {
-                localStorage.setItem("token", data.access_token);
-                localStorage.setItem("isLoggedIn", "true");
-                window.dispatchEvent(new Event("loginChange"));
-                navigate("/dashboard");
-            } else {
+            if (!data.access_token) {
                 setSubmitError("Login successful but no token received. Please try again.");
+                setLoading(false);
+                return;
             }
+            localStorage.setItem("token", data.access_token);
+            localStorage.setItem("isLoggedIn", "true");
+
+            const userRes = await apiClient.get("/auth/get-user");
+            const role = userRes.data?.role;
+            if (role !== "admin") {
+                localStorage.removeItem("token");
+                localStorage.removeItem("isLoggedIn");
+                window.dispatchEvent(new Event("loginChange"));
+                setSubmitError("Only administrators can log in here.");
+                setLoading(false);
+                return;
+            }
+
+            window.dispatchEvent(new Event("loginChange"));
+            navigate("/dashboard", { replace: true });
         } catch (err) {
             const msg = err.response?.data?.error || err.message || "Login failed. Please try again.";
             setSubmitError(msg);
