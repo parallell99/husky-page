@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { apiClient } from "@/api/client";
 import {
   FileText,
   FolderOpen,
@@ -8,13 +8,20 @@ import {
   Bell,
   KeyRound,
   LogOut,
+  MessageCircle,
+  Newspaper,
+  Heart,
+  RefreshCw,
 } from "lucide-react";
+
+const NOTIFICATION_TYPE = { NEW_ARTICLE: "new_article", COMMENT: "comment", LIKE: "like" };
 
 function Notification() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [userRole, setUserRole] = useState(null);
 
   const menuItems = [
     { icon: FileText, label: "Article Management", active: false, path: "/dashboard" },
@@ -77,61 +84,120 @@ function Notification() {
     }
   };
 
-  const getDefaultNotifications = () => {
-    return [
-      {
-        id: 1,
-        avatar: null,
-        text: "User commented on your article 'The Art of Mindfulness'",
-        hoursAgo: 2,
-        postId: 1, // Default post ID for testing
-      },
-      {
-        id: 2,
-        avatar: null,
-        text: "New follower: John Doe started following you",
-        hoursAgo: 4,
-        postId: null, // No associated post
-      },
-      {
-        id: 3,
-        avatar: null,
-        text: "Your article 'Cat Nutrition Guide' was published",
-        hoursAgo: 6,
-        postId: 2, // Default post ID for testing
-      },
-      {
-        id: 4,
-        avatar: null,
-        text: "User liked your article 'The Power of Habits'",
-        hoursAgo: 12,
-        postId: 3, // Default post ID for testing
-      },
-      {
-        id: 5,
-        avatar: null,
-        text: "Comment reply: Sarah replied to your comment",
-        hoursAgo: 18,
-        postId: 1, // Default post ID for testing
-      },
-      {
-        id: 6,
-        avatar: null,
-        text: "Your draft 'Future of Work' was auto-saved",
-        hoursAgo: 24,
-        postId: null, // No associated post
-      },
-    ];
+  const getDefaultNotifications = () => [
+    { id: 1, type: NOTIFICATION_TYPE.NEW_ARTICLE, text: "Thompson P. Published new article.", hoursAgo: 1, postId: 1 },
+    { id: 2, type: NOTIFICATION_TYPE.COMMENT, text: "Jacob Lash. Comment on the article you have commented on.", hoursAgo: 2, postId: 1 },
+    { id: 3, type: NOTIFICATION_TYPE.NEW_ARTICLE, text: "Thompson P. Published new article.", hoursAgo: 5, postId: 2 },
+    { id: 4, type: NOTIFICATION_TYPE.COMMENT, text: "Jacob Lash. Comment on the article you have commented on.", hoursAgo: 8, postId: 2 },
+  ];
+
+  // ดึงชื่อ user จริงจาก notification (รองรับหลายฟิลด์จาก API)
+  const getActorName = (notification) => {
+    return (
+      notification?.actor_name ??
+      notification?.name ??
+      notification?.user?.name ??
+      notification?.user?.username ??
+      notification?.username ??
+      null
+    );
   };
 
-  // Load notifications from localStorage or use default
+  // แสดงแบบ "ชื่อ" (ตัวหนา) แล้วต่อด้วย "กิจกรรมที่ทำ" — รองรับทั้งรูปแบบใหม่และข้อความเก่าใน DB
+  const renderNotificationText = (notification) => {
+    const text = (notification?.text || "").trim();
+    const nameFromApi = getActorName(notification);
+    let namePart = nameFromApi;
+    let actionPart = text;
+
+    if (!namePart && typeof text === "string") {
+      // รูปแบบใหม่: "Thompson P. Published new article." / "Jacob Lash. Comment on..."
+      const dotSpace = ". ";
+      const idx = text.indexOf(dotSpace);
+      if (idx > 0) {
+        namePart = text.slice(0, idx);
+        actionPart = text.slice(idx + dotSpace.length);
+      } else if (text.includes("มีคนคอมเม้นในบทความ")) {
+        // รูปแบบเก่า (แจ้งเตือนเก่าใน DB): ใช้ชื่อจริงจาก API ถ้ามี ไม่มีค่อยใช้ "Someone"
+        namePart = getActorName(notification) || "Someone";
+        actionPart = text.replace(/^มีคนคอมเม้นในบทความ\s*/, "commented on the article ");
+      } else if (text.includes("มีบทความใหม่")) {
+        // รูปแบบเก่า: "มีบทความใหม่: xxx"
+        namePart = getActorName(notification) || "Admin";
+        actionPart = text.replace(/^มีบทความใหม่\s*:?\s*/, "Published new article: ").trim() || "Published new article.";
+      } else if (text.includes("มีคนกด like")) {
+        namePart = getActorName(notification) || "Someone";
+        actionPart = text.replace(/^มีคนกด like\s*/, "liked the article ");
+      }
+    }
+
+    if (namePart) {
+      return (
+        <span>
+          <span className="font-semibold text-brown-800">{namePart}</span>
+          {actionPart ? (
+            <>
+              {" "}
+              {actionPart}
+            </>
+          ) : null}
+        </span>
+      );
+    }
+    return text || "—";
+  };
+
+  const getNotificationTypeDisplay = (type) => {
+    switch (type) {
+      case NOTIFICATION_TYPE.NEW_ARTICLE:
+        return { icon: Newspaper, label: "บทความใหม่", bgClass: "bg-green-100 text-green-700" };
+      case NOTIFICATION_TYPE.COMMENT:
+        return { icon: MessageCircle, label: "คอมเม้น", bgClass: "bg-amber-100 text-amber-700" };
+      case NOTIFICATION_TYPE.LIKE:
+        return { icon: Heart, label: "Like", bgClass: "bg-rose-100 text-rose-700" };
+      default:
+        return { icon: Bell, label: "แจ้งเตือน", bgClass: "bg-brown-200 text-brown-600" };
+    }
+  };
+
+  const normalizeNotificationType = (list) => {
+    if (!Array.isArray(list)) return list;
+    return list.map((n) => {
+      if (n.type === NOTIFICATION_TYPE.NEW_ARTICLE || n.type === NOTIFICATION_TYPE.COMMENT || n.type === NOTIFICATION_TYPE.LIKE) return n;
+      const t = (n.text || "").toLowerCase();
+      const inferred = t.includes("like") ? NOTIFICATION_TYPE.LIKE
+        : t.includes("คอมเม้น") || t.includes("comment") ? NOTIFICATION_TYPE.COMMENT
+        : t.includes("บทความใหม่") || t.includes("new article") || t.includes("published") ? NOTIFICATION_TYPE.NEW_ARTICLE
+        : null;
+      return { ...n, type: n.type || inferred };
+    });
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("isLoggedIn");
+    window.dispatchEvent(new Event("loginChange"));
+    navigate("/");
+  };
+
+  // admin เห็นเฉพาะแจ้งเตือน comment และ like
+  const displayNotifications = userRole === "admin"
+    ? notifications.filter((n) => n.type === NOTIFICATION_TYPE.COMMENT || n.type === NOTIFICATION_TYPE.LIKE)
+    : notifications;
+
+  // เมื่อเปิดหน้านี้ = อ่านแล้ว → บันทึกเวลาอ่าน เพื่อให้ Navbar ซ่อนเลขแจ้งเตือน
+  useEffect(() => {
+    const readAt = Date.now().toString();
+    localStorage.setItem("notifications_read_at", readAt);
+    window.dispatchEvent(new Event("notificationRead"));
+  }, []);
+
   const loadNotifications = () => {
-    const storedNotifications = localStorage.getItem("notifications");
-    if (storedNotifications) {
+    const stored = localStorage.getItem("notifications");
+    if (stored) {
       try {
-        return JSON.parse(storedNotifications);
-      } catch (error) {
-        console.error("Error loading notifications:", error);
+        return normalizeNotificationType(JSON.parse(stored));
+      } catch (e) {
         return getDefaultNotifications();
       }
     }
@@ -146,10 +212,8 @@ function Notification() {
         setError(null);
       }
 
-      const endpoint = "https://blog-post-project-api.vercel.app/notifications";
-      
-      const response = await axios.get(endpoint, {
-        timeout: 3000,
+      const response = await apiClient.get("/notifications", {
+        timeout: 10000,
       });
 
       console.log("Success fetching notifications:", response.data);
@@ -197,30 +261,36 @@ function Notification() {
         const hoursAgo = timestamp ? convertTimestampToHoursAgo(timestamp) : 0;
 
         // Extract post/article ID from various possible fields
-        const postId = notification.postId || 
-                       notification.articleId || 
-                       notification.post_id || 
-                       notification.article_id || 
-                       notification.relatedPostId ||
-                       notification.post?.id ||
-                       notification.article?.id ||
-                       null;
+        const postId = notification.postId ?? notification.post_id ?? notification.articleId ?? notification.article_id ?? notification.relatedPostId ?? notification.post?.id ?? notification.article?.id ?? null;
+        const type = notification.type || notification.notification_type || null;
+        const nameFromUsers =
+          notification.actor_name ??
+          notification.name ??
+          notification.user?.name ??
+          notification.user?.username ??
+          notification.username ??
+          null;
 
         return {
           id: notification.id || index + 1,
-          avatar: avatar,
-          text: text,
-          hoursAgo: hoursAgo,
-          postId: postId,
+          type,
+          avatar,
+          text,
+          hoursAgo,
+          postId,
+          created_at: timestamp || null,
+          name: nameFromUsers,
+          actor_name: nameFromUsers,
         };
       });
 
-      if (mappedNotifications.length > 0) {
-        setNotifications(mappedNotifications);
-        setError(null); // Clear error if API succeeds
-        
-        // Save to localStorage for offline access
-        localStorage.setItem("notifications", JSON.stringify(mappedNotifications));
+      const normalized = normalizeNotificationType(mappedNotifications);
+      setNotifications(normalized);
+      setError(null);
+      if (normalized.length > 0) {
+        localStorage.setItem("notifications", JSON.stringify(normalized));
+      } else {
+        localStorage.removeItem("notifications");
       }
     } catch (err) {
       console.error("Error fetching notifications:", err);
@@ -247,35 +317,48 @@ function Notification() {
     }
   };
 
-  // Load notifications on mount
+  // โหลด role ของ user (admin จะเห็นเฉพาะ comment + like)
   useEffect(() => {
-    // Set notifications from storage/fallback immediately for instant display
-    setNotifications(loadNotifications());
-    
-    // Fetch from API in background (silently, without showing error)
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    apiClient.get("/auth/get-user").then((res) => {
+      setUserRole(res.data?.role || null);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const cached = loadNotifications();
+    setNotifications(cached);
+    // ดึงจาก API ทุกครั้งที่เปิดหน้า (ข้อมูลล่าสุด) แล้วแทนที่ cache
     fetchNotifications(false);
   }, []);
 
-  const handleView = (notificationId) => {
-    // Find the notification by ID
-    const notification = notifications.find((n) => n.id === notificationId);
-    
-    if (!notification) {
-      console.error("Notification not found:", notificationId);
-      return;
-    }
+  // ดึงข้อมูลใหม่เมื่อกลับมาเปิดแท็บ หรือเมื่อมีกิจกรรมใหม่ (เช่น มีคนกด like)
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchNotifications(false);
+      }
+    };
+    const onNotificationsRefresh = () => {
+      fetchNotifications(false);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("notificationsRefresh", onNotificationsRefresh);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("notificationsRefresh", onNotificationsRefresh);
+    };
+  }, []);
 
-    // Extract postId from notification
-    const postId = notification.postId;
+  const handleRefresh = () => {
+    fetchNotifications(true);
+  };
 
-    // Navigate to post detail page with comment section hash
+  const handleView = (notification) => {
+    const postId = notification.postId ?? notification.post_id;
     if (postId) {
       navigate(`/post/${postId}#comments`);
-    } else {
-      // If no postId, log and do nothing (or navigate to home)
-      console.log("Notification has no associated post:", notificationId);
-      // Optionally navigate to home or show a message
-      // navigate("/");
     }
   };
 
@@ -283,8 +366,14 @@ function Notification() {
     <div className="flex h-screen bg-brown-100 font-poppins">
       {/* Left Sidebar */}
       <aside className="w-64 bg-white border-r border-brown-300 flex flex-col shadow-sm">
-        {/* Logo */}
-        <div className="p-6 border-b border-brown-300 bg-brown-200">
+        {/* Logo - คลิกไปหน้า Home */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate("/")}
+          onKeyDown={(e) => e.key === "Enter" && navigate("/")}
+          className="p-6 border-b border-brown-300 bg-brown-200 cursor-pointer hover:opacity-90"
+        >
           <div className="flex items-center gap-2 mb-2">
             <span className="text-2xl font-semibold text-brown-600">hh</span>
             <span className="text-2xl font-semibold text-green">.</span>
@@ -300,7 +389,7 @@ function Notification() {
               return (
                 <button
                   key={index}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"
@@ -321,7 +410,7 @@ function Notification() {
               return (
                 <button
                   key={index + 5}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"
@@ -341,15 +430,31 @@ function Notification() {
       <main className="flex-1 overflow-y-auto bg-brown-100">
         <div className="p-8 w-full mx-auto">
           {/* Header */}
-          <div className="mb-6">
+          <div className="mb-6 flex items-center justify-between gap-4">
             <h1 className="text-2xl font-semibold text-brown-600">
               Notifications
             </h1>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brown-200 text-brown-600 hover:bg-brown-300 font-medium text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              aria-label="ดึงข้อมูลใหม่"
+            >
+              <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+              {loading ? "กำลังโหลด..." : "ดึงข้อมูลใหม่"}
+            </button>
           </div>
+
+          {error && (
+            <div className="mb-4 px-4 py-2 rounded-lg bg-amber-100 text-amber-800 text-sm">
+              {error}
+            </div>
+          )}
 
           {/* Notification List */}
           <div className="bg-white rounded-xl shadow-sm border border-brown-300 overflow-hidden">
-            {notifications.length === 0 ? (
+            {displayNotifications.length === 0 ? (
               <div className="px-6 py-12 text-center">
                 <span className="text-sm text-brown-400">
                   No notifications found.
@@ -357,47 +462,48 @@ function Notification() {
               </div>
             ) : (
               <div className="divide-y divide-brown-300">
-                {notifications.map((notification, index) => (
-                  <div
-                    key={notification.id}
-                    className="px-6 py-4 hover:bg-brown-50 transition-colors flex items-center gap-4"
-                  >
-                    {/* Avatar */}
-                    <div className="shrink-0">
-                      {notification.avatar ? (
-                        <img
-                          src={notification.avatar}
-                          alt="User"
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
-                          <User className="w-6 h-6 text-brown-400" />
+                {displayNotifications.map((notification) => {
+                  const typeDisplay = getNotificationTypeDisplay(notification.type);
+                  const TypeIcon = typeDisplay.icon;
+                  const hasPost = !!(notification.postId ?? notification.post_id);
+                  return (
+                    <div
+                      key={notification.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => hasPost && handleView(notification)}
+                      onKeyDown={(e) => hasPost && (e.key === "Enter" || e.key === " ") && handleView(notification)}
+                      className={`px-6 py-4 hover:bg-brown-50 transition-colors flex items-center gap-4 ${hasPost ? "cursor-pointer" : ""}`}
+                    >
+                      <div className="shrink-0 flex flex-col items-center gap-1">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${typeDisplay.bgClass}`}>
+                          <TypeIcon className="w-5 h-5" />
+                        </div>
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${typeDisplay.bgClass}`}>
+                          {typeDisplay.label}
+                        </span>
+                      </div>
+                      {notification.avatar && (
+                        <div className="shrink-0">
+                          <img src={notification.avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-brown-600">
+                          {renderNotificationText(notification)}
+                        </p>
+                        <p className="text-xs text-orange mt-1">{getRelativeTime(notification.hoursAgo)}</p>
+                      </div>
+                      {hasPost && (
+                        <div className="shrink-0">
+                          <span className="text-sm font-medium text-brown-600 hover:text-brown-800 transition-colors hover:underline">
+                            View
+                          </span>
                         </div>
                       )}
                     </div>
-
-                    {/* Notification Content */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-brown-600">
-                        {notification.text}
-                      </p>
-                      <p className="text-xs text-orange mt-1">
-                        {getRelativeTime(notification.hoursAgo)}
-                      </p>
-                    </div>
-
-                    {/* View Link */}
-                    <div className="shrink-0">
-                      <button
-                        onClick={() => handleView(notification.id)}
-                        className="text-sm font-medium text-brown-600 hover:text-brown-800 transition-colors hover:underline cursor-pointer"
-                      >
-                        View
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

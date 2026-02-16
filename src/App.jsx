@@ -9,10 +9,12 @@ import CreateArticle from './components/page/CreateArticle.jsx'
 import CategoryManagement from './components/page/CategoryManagement.jsx'
 import CreateCategory from './components/page/CreateCategory.jsx'
 import Profile from './components/page/Profile.jsx'
-import Notification from './components/page/Notification.jsx'
+import Notification from '@/components/page/Notification.jsx'
 import ResetPassword from './components/page/ResetPassword.jsx'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import ViewPost from './components/page/ViewPost.jsx'
+import HealthTestPage from './components/page/HealTestPage.jsx'
+import CreatePostComponent from './components/page/CreatePostComponent.jsx'
 import './App.css'
 
 
@@ -27,6 +29,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/post/:id" element={<ViewPost />} />
+        <Route path="/health-test" element={<HealthTestPage />} />
         <Route path="/member" element={<MemberPage />} />
         <Route path="/member/reset-password" element={<MemberResetPassword />} />
         <Route path="/admin-login" element={<AdminLogin />} />
@@ -39,6 +42,7 @@ function App() {
         <Route path="/dashboard/profile" element={<Profile />} />
         <Route path="/dashboard/notification" element={<Notification />} />
         <Route path="/dashboard/reset-password" element={<ResetPassword />} />
+        <Route path="/dashboard/create-post" element={<CreatePostComponent />} />
       </Routes>
     </Router>
     </>

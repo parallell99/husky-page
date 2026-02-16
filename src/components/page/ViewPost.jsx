@@ -1,7 +1,7 @@
 import Navbar from "../Navbar";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import axios from "axios";
+import { apiClient, postByIdUrl } from "@/api/client";
 import { blogPosts as fallbackPosts } from "../../data/blogPost";
 import facebookicon from "../../assets/image/Facebook_black.svg"
 import twittericon from "../../assets/image/Twitter_black.svg"
@@ -12,10 +12,16 @@ import { useCopyToClipboard } from "../../hooks/use-copy-to-clipboard";
 
 function CardDetail() {
     const { id } = useParams();
+    const navigate = useNavigate();
     const [post, setPost] = useState(null);
     const [loading, setLoading] = useState(true);
     const [comment, setComment] = useState("");
     const [comments, setComments] = useState([]);
+    const [likeCount, setLikeCount] = useState(0);
+    const [isLiked, setIsLiked] = useState(false);
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [loadingLike, setLoadingLike] = useState(false);
+    const [loadingComment, setLoadingComment] = useState(false);
     const { copyToClipboard, isCopied } = useCopyToClipboard();
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [showAccountPrompt, setShowAccountPrompt] = useState(false);
@@ -44,38 +50,81 @@ function CardDetail() {
         window.open(shareUrl, '_blank', 'width=600,height=400');
     };
 
+    // Check login status
     useEffect(() => {
-        const fetchPost = async () => {
+        const token = localStorage.getItem("token");
+        setIsLoggedIn(!!token);
+    }, []);
+
+    // Fetch post, likes, and comments
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!id) return;
+
             try {
-                // Try to fetch from API first
-                const response = await axios.get(`https://blog-post-project-api.vercel.app/${id}`, {
-                    timeout: 3000
-                });
-
-                // Handle different response formats
-                let postData = null;
-                if (response.data) {
-                    if (Array.isArray(response.data)) {
-                        postData = response.data.find(p => p.id === parseInt(id)) || response.data[0];
-                    } else if (response.data.id) {
-                        postData = response.data;
-                    } else if (response.data.post) {
-                        postData = response.data.post;
-                    } else if (response.data.data) {
-                        postData = response.data.data;
-                    }
-                }
-
-                if (postData) {
-                    setPost(postData);
+                setLoading(true);
+                
+                // Fetch post
+                const postResponse = await apiClient.get(`/posts/${id}`);
+                if (postResponse.data && (postResponse.data.id || postResponse.data.title)) {
+                    const p = postResponse.data;
+                    // ใช้เฉพาะวันที่ (ไทย พ.ศ.) เช่น 15/2/2569
+                    const formatThaiDate = (dateStr) => {
+                        if (!dateStr) return "";
+                        const d = new Date(dateStr);
+                        return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear() + 543}`;
+                    };
+                    setPost({
+                        id: p.id,
+                        title: p.title,
+                        image: p.image,
+                        description: p.description,
+                        content: p.content,
+                        category: p.category_name ?? p.category ?? "Uncategorized",
+                        date: (p.date || p.created_at) ? formatThaiDate(p.date || p.created_at) : null,
+                        author: p.author_name ?? p.author ?? "ผู้เขียน",
+                    });
                 } else {
-                    // Fallback to local data
                     const localPost = fallbackPosts.find(p => p.id === parseInt(id));
                     setPost(localPost || null);
                 }
+
+                // Fetch likes
+                try {
+                    const likesResponse = await apiClient.get(`/posts/${id}/likes`);
+                    setLikeCount(likesResponse.data.count || 0);
+                    setIsLiked(likesResponse.data.isLiked || false);
+                } catch (err) {
+                    // Error fetching likes - silently fail
+                }
+
+                // Fetch comments
+                try {
+                    const commentsResponse = await apiClient.get(`/posts/${id}/comments`);
+                    
+                    if (!Array.isArray(commentsResponse.data)) {
+                        setComments([]);
+                        return;
+                    }
+                    
+                    const mappedComments = commentsResponse.data.map((c) => {
+                        // รองรับหลาย column names
+                        const commentText = c.content || c.comment_text || c.comment || c.text || "";
+                        return {
+                            id: c.id,
+                            text: commentText,
+                            author: c.author_name || c.username || "User",
+                            date: c.created_at 
+                                ? new Date(c.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+                                : new Date().toLocaleDateString(),
+                            profilePic: c.profile_pic || null,
+                        };
+                    });
+                    setComments(mappedComments);
+                } catch (err) {
+                    setComments([]);
+                }
             } catch (error) {
-                console.error("Error fetching post:", error.message);
-                // Fallback to local data
                 const localPost = fallbackPosts.find(p => p.id === parseInt(id));
                 setPost(localPost || null);
             } finally {
@@ -83,9 +132,7 @@ function CardDetail() {
             }
         };
 
-        if (id) {
-            fetchPost();
-        }
+        fetchData();
     }, [id]);
 
     // Scroll to comment section when hash is present
@@ -160,8 +207,8 @@ function CardDetail() {
                             />
                         </div>
             
-            <div className="flex flex-col lg:grid lg:grid-cols-[1fr_280px] items-start w-full mt-10 lg:mt-20 px-4 lg:px-30 gap-6">
-                <div className=" rounded-2xl pb-5 lg:w-full">
+            <div className="flex flex-col lg:grid lg:grid-cols-[1fr_280px] items-start  mt-10 lg:mt-20 px-4 lg:px-30 gap-6">
+                <div className=" rounded-2xl pb-5  lg:w-full">
                     <div className="flex flex-col gap-6 ">
                         {/* Category and Date */}
                         <div className="flex items-center gap-3">
@@ -183,7 +230,7 @@ function CardDetail() {
 
                         {/* Content */}
                         {post.content && (
-                            <div className="prose max-w-none">
+                            <div className="prose mx-auto ">
                                 {formatContent(post.content)}
                             </div>
                         )}
@@ -215,12 +262,41 @@ function CardDetail() {
             </div>
             
             <div className="flex flex-col gap-5 py-5 items-center justify-center  bg-brown-200 lg:w-195 lg:flex-row lg:ml-30 lg:rounded-2xl ">
-                <p 
-                    className="text-sm text-brown-600 bg-white border w-85 h-12 rounded-4xl flex items-center justify-center cursor-pointer hover:bg-brown-100 transition-colors"
-                    onClick={() => setShowAccountPrompt(!showAccountPrompt)}
+                <button
+                    className={`text-sm text-brown-600 bg-white border w-85 h-12 rounded-4xl flex items-center justify-center transition-colors ${
+                        isLiked ? "bg-green-100 border-green-400" : "hover:bg-brown-100"
+                    } ${loadingLike ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                    onClick={async () => {
+                        if (!isLoggedIn) {
+                            setShowAccountPrompt(true);
+                            return;
+                        }
+                        if (loadingLike) return;
+
+                        try {
+                            setLoadingLike(true);
+                            const response = await apiClient.post(`/posts/${id}/like`);
+                            setIsLiked(response.data.liked);
+                            // Refresh like count
+                            const likesResponse = await apiClient.get(`/posts/${id}/likes`);
+                            setLikeCount(likesResponse.data.count || 0);
+                            // แจ้งให้ Navbar และหน้า Notification ดึงแจ้งเตือนใหม่ (รวม like ที่เพิ่งสร้าง)
+                            window.dispatchEvent(new Event("notificationsRefresh"));
+                        } catch (err) {
+                            if (err.response?.status === 401) {
+                                localStorage.removeItem("token");
+                                localStorage.removeItem("isLoggedIn");
+                                setIsLoggedIn(false);
+                                setShowAccountPrompt(true);
+                            }
+                        } finally {
+                            setLoadingLike(false);
+                        }
+                    }}
+                    disabled={loadingLike}
                 >
-                    🙂{post.like || post.likes || 0}
-                </p>
+                    {isLiked ? "❤️" : "🙂"}{likeCount}
+                </button>
                 <div className="flex gap-3">
                 <span 
                     className="bg-white w-40 h-12 border rounded-4xl flex items-center justify-center cursor-pointer hover:bg-brown-100 transition-colors"
@@ -253,33 +329,83 @@ function CardDetail() {
                     <h2 className="text-xl font-semibold mb-6">Comment</h2>
                     
                     {/* Comment Input */}
-                    <div className="flex flex-col gap-3 mb-8">
-                        <textarea
-                            placeholder="What are your thoughts?"
-                            className="w-full p-4 rounded-md border border-brown-300 text-sm bg-white text-brown-600 resize-none"
-                            rows="4"
-                            value={comment}
-                            onChange={(e) => setComment(e.target.value)}
-                        />
-                        <div className="flex justify-start">
-                            <button
-                                onClick={() => {
-                                    if (comment.trim()) {
-                                        setComments([...comments, {
-                                            id: Date.now(),
-                                            text: comment,
-                                            author: "You",
-                                            date: new Date().toLocaleDateString()
-                                        }]);
-                                        setComment("");
-                                    }
-                                }}
-                                className="bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 px-6 hover:bg-brown-700 transition-colors"
-                            >
-                                Send
-                            </button>
+                    {isLoggedIn ? (
+                        <div className="flex flex-col gap-3 mb-8">
+                            <textarea
+                                placeholder="What are your thoughts?"
+                                className="w-full p-4 rounded-md border border-brown-300 text-sm bg-white text-brown-600 resize-none"
+                                rows="4"
+                                value={comment}
+                                onChange={(e) => setComment(e.target.value)}
+                                disabled={loadingComment}
+                            />
+                            <div className="flex justify-start">
+                                <button
+                                    onClick={async () => {
+                                        if (!comment.trim() || loadingComment) return;
+                                        if (!isLoggedIn) {
+                                            setShowAccountPrompt(true);
+                                            return;
+                                        }
+
+                                        try {
+                                            setLoadingComment(true);
+                                            const response = await apiClient.post(`/posts/${id}/comments`, {
+                                                content: comment.trim(),
+                                            });
+                                            
+                                            // Add new comment to list
+                                            const newComment = {
+                                                id: response.data.id,
+                                                text: response.data.content,
+                                                author: response.data.author_name || response.data.username || "User",
+                                                date: response.data.created_at 
+                                                    ? new Date(response.data.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+                                                    : new Date().toLocaleDateString(),
+                                                profilePic: response.data.profile_pic || null,
+                                            };
+                                            setComments([newComment, ...comments]);
+                                            setComment("");
+                                        } catch (err) {
+                                            if (err.response?.status === 401) {
+                                                localStorage.removeItem("token");
+                                                localStorage.removeItem("isLoggedIn");
+                                                setIsLoggedIn(false);
+                                                setShowAccountPrompt(true);
+                                            } else {
+                                                const errorMsg = err.response?.data?.message || err.response?.data?.error || "Failed to create comment. Please try again.";
+                                                alert(errorMsg);
+                                            }
+                                        } finally {
+                                            setLoadingComment(false);
+                                        }
+                                    }}
+                                    disabled={loadingComment || !comment.trim()}
+                                    className="bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 px-6 hover:bg-brown-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {loadingComment ? "Sending..." : "Send"}
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="mb-8 p-4 bg-brown-100 rounded-lg border border-brown-300">
+                            <p className="text-sm text-brown-600 mb-3">Please login to comment</p>
+                            <div className="flex gap-2">
+                                <Link
+                                    to="/login"
+                                    className="bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 px-6 hover:bg-brown-700 transition-colors"
+                                >
+                                    Login
+                                </Link>
+                                <Link
+                                    to="/signup"
+                                    className="bg-white border border-brown-600 rounded-3xl text-brown-600 text-sm font-medium py-2 px-6 hover:bg-brown-50 transition-colors"
+                                >
+                                    Sign up
+                                </Link>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Comments List */}
                     <div className="flex flex-col gap-4">
@@ -289,11 +415,19 @@ function CardDetail() {
                             comments.map((commentItem) => (
                                 <div key={commentItem.id} className="bg-white rounded-2xl p-5 border border-brown-300">
                                     <div className="flex items-start gap-3 mb-2">
-                                        <img
-                                            className="w-8 h-8 rounded-full"
-                                            src="https://res.cloudinary.com/dcbpjtd1r/image/upload/v1728449784/my-blog-post/xgfy0xnvyemkklcqodkg.jpg"
-                                            alt={commentItem.author}
-                                        />
+                                        {commentItem.profilePic ? (
+                                            <img
+                                                className="w-8 h-8 rounded-full object-cover"
+                                                src={commentItem.profilePic}
+                                                alt={commentItem.author}
+                                            />
+                                        ) : (
+                                            <div className="w-8 h-8 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
+                                                <span className="text-xs text-brown-600 font-semibold">
+                                                    {commentItem.author.charAt(0).toUpperCase()}
+                                                </span>
+                                            </div>
+                                        )}
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <span className="font-semibold text-sm">{commentItem.author}</span>

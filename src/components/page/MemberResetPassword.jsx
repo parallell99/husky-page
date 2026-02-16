@@ -1,20 +1,24 @@
 import Navbar from "../Navbar";
 import { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Eye, EyeOff, User, RotateCcw } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Eye, EyeOff, User, RotateCcw, Loader2 } from "lucide-react";
+import { apiClient } from "@/api/client";
 
 function MemberResetPassword() {
     const location = useLocation();
+    const navigate = useNavigate();
     const [showSavedPopup, setShowSavedPopup] = useState(false);
     const [showConfirmPopup, setShowConfirmPopup] = useState(false);
     const [userProfile, setUserProfile] = useState({
-        name: "Moodeng ja",
-        username: "moodeng",
+        name: "",
+        username: "",
         email: "",
         profileImage: null,
     });
-    
-    // Reset Password states
+    const [profileLoading, setProfileLoading] = useState(true);
+    const [resetLoading, setResetLoading] = useState(false);
+    const [resetError, setResetError] = useState("");
+
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -27,26 +31,50 @@ function MemberResetPassword() {
         confirmPassword: ""
     });
 
-    // Load user profile from localStorage
+    // โหลดข้อมูล user จริงจาก API (ต้อง login ถึงเข้าได้)
     useEffect(() => {
-        const storedProfile = localStorage.getItem("user_profile");
-        if (storedProfile) {
-            try {
-                const profile = JSON.parse(storedProfile);
-                setUserProfile({
-                    name: profile.name || "Moodeng ja",
-                    username: profile.username || "moodeng",
-                    email: profile.email || "",
-                    profileImage: profile.profileImage || null,
-                });
-            } catch (error) {
-                console.error("Error loading profile:", error);
-            }
+        const token = localStorage.getItem("token");
+        if (!token) {
+            setProfileLoading(false);
+            navigate("/login", { replace: true });
+            return;
         }
-    }, []);
+        apiClient
+            .get("/auth/get-user")
+            .then((res) => {
+                const u = res.data?.user ?? res.data;
+                setUserProfile({
+                    name: u?.name ?? "",
+                    username: u?.username ?? "",
+                    email: u?.email ?? "",
+                    profileImage: u?.profilePic ?? u?.profile_pic ?? null,
+                });
+            })
+            .catch((err) => {
+                if (err.response?.status === 401) {
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("isLoggedIn");
+                    navigate("/login", { replace: true });
+                    return;
+                }
+                const stored = localStorage.getItem("user_profile");
+                if (stored) {
+                    try {
+                        const p = JSON.parse(stored);
+                        setUserProfile({
+                            name: p.name || "",
+                            username: p.username || "",
+                            email: p.email || "",
+                            profileImage: p.profileImage ?? p.profile_pic ?? null,
+                        });
+                    } catch (_) {}
+                }
+            })
+            .finally(() => setProfileLoading(false));
+    }, [navigate]);
 
     const getUserDisplayName = () => {
-        return userProfile?.name || "Moodeng ja";
+        return userProfile?.name || userProfile?.username || "User";
     };
 
     const getUserAvatar = () => {
@@ -89,23 +117,35 @@ function MemberResetPassword() {
         }
     };
 
-    const handleConfirmResetPassword = () => {
-        // Handle password reset logic here
-        console.log("Resetting password");
-        
-        // Clear form
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-        
-        // Close confirmation popup
-        setShowConfirmPopup(false);
-        
-        // Show saved popup
-        setShowSavedPopup(true);
-        setTimeout(() => {
-            setShowSavedPopup(false);
-        }, 2000);
+    const handleConfirmResetPassword = async () => {
+        setResetLoading(true);
+        setResetError("");
+        try {
+            await apiClient.put("/auth/reset-password", {
+                oldPassword: currentPassword.trim(),
+                newPassword: newPassword.trim(),
+            });
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+            setShowConfirmPopup(false);
+            setShowSavedPopup(true);
+            setTimeout(() => setShowSavedPopup(false), 3000);
+        } catch (err) {
+            const msg = err.response?.data?.error || err.message || "Failed to reset password.";
+            setResetError(msg);
+            if (err.response?.status === 401) {
+                setTimeout(() => {
+                    setShowConfirmPopup(false);
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("isLoggedIn");
+                    window.dispatchEvent(new Event("loginChange"));
+                    navigate("/login");
+                }, 1500);
+            }
+        } finally {
+            setResetLoading(false);
+        }
     };
 
     return (
@@ -142,8 +182,11 @@ function MemberResetPassword() {
                             </Link>
                         </div>
                         <div className="flex items-center gap-4">
-                            {/* User Avatar */}
-                            {getUserAvatar() ? (
+                            {profileLoading ? (
+                                <div className="w-16 h-16 rounded-full bg-brown-200 animate-pulse flex items-center justify-center">
+                                    <User className="w-8 h-8 text-brown-400" />
+                                </div>
+                            ) : getUserAvatar() ? (
                                 <img
                                     src={getUserAvatar()}
                                     alt="User"
@@ -275,6 +318,9 @@ function MemberResetPassword() {
                             )}
                         </div>
 
+                        {resetError && (
+                            <p className="text-sm text-red-600">{resetError}</p>
+                        )}
                         {/* Reset Password Button */}
                         <button
                             type="submit"
@@ -298,24 +344,29 @@ function MemberResetPassword() {
 
             {/* Confirm Reset Password Popup */}
             {showConfirmPopup && (
-                <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-                    <div className="bg-white rounded-2xl p-6 max-w-sm w-[90%] shadow-lg pointer-events-auto">
+                <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/30">
+                    <div className="bg-white rounded-2xl p-6 max-w-sm w-[90%] shadow-lg">
                         <h3 className="text-lg font-semibold text-brown-600 mb-4 text-center">Confirm</h3>
-                        <p className="text-sm text-brown-500 mb-6 text-center">
+                        <p className="text-sm text-brown-500 mb-4 text-center">
                             Are you sure you want to reset your password?
                         </p>
+                        {resetError && (
+                            <p className="text-sm text-red-600 mb-4 text-center">{resetError}</p>
+                        )}
                         <div className="flex gap-3">
                             <button
-                                onClick={() => setShowConfirmPopup(false)}
-                                className="flex-1 bg-white border border-brown-300 text-brown-600 px-4 py-2 rounded-full text-sm font-medium hover:bg-brown-100 transition-colors"
+                                onClick={() => { setShowConfirmPopup(false); setResetError(""); }}
+                                disabled={resetLoading}
+                                className="flex-1 bg-white border border-brown-300 text-brown-600 px-4 py-2 rounded-full text-sm font-medium hover:bg-brown-100 transition-colors disabled:opacity-50"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleConfirmResetPassword}
-                                className="flex-1 bg-brown-600 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-brown-700 transition-colors"
+                                disabled={resetLoading}
+                                className="flex-1 bg-brown-600 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-brown-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                             >
-                                Confirm
+                                {resetLoading ? <Loader2 className="animate-spin" size={18} /> : "Confirm"}
                             </button>
                         </div>
                     </div>

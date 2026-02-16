@@ -1,14 +1,16 @@
 import Navbar from "../Navbar";
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { apiClient } from "@/api/client";
 
-
-
-function Login() {
+function AdminLogin() {
+    const navigate = useNavigate();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [submitError, setSubmitError] = useState("");
     const [errors, setErrors] = useState({
         email: "",
         password: ""
@@ -18,35 +20,39 @@ function Login() {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
     };
-    
-    const handleLogin = (e) => {
+
+    const handleLogin = async (e) => {
         e.preventDefault();
-        
-        const newErrors = {
-            email: "",
-            password: ""
-        };
-
-        // Validate email
-        if (email.trim() === "") {
-            newErrors.email = "Email is required";
-        } else if (!validateEmail(email)) {
-            newErrors.email = "Email must be a valid email";
-        }
-
-        // Validate password
-        if (password === "") {
-            newErrors.password = "Password is required";
-        }
-
+        const newErrors = { email: "", password: "" };
+        if (email.trim() === "") newErrors.email = "Email is required";
+        else if (!validateEmail(email)) newErrors.email = "Email must be a valid email";
+        if (password === "") newErrors.password = "Password is required";
         setErrors(newErrors);
+        setSubmitError("");
 
-        // If no errors, proceed with login
-        if (!newErrors.email && !newErrors.password) {
-            console.log(email, password);
-            // Here you would typically send the data to your backend
+        if (newErrors.email || newErrors.password) return;
+
+        setLoading(true);
+        try {
+            const { data } = await apiClient.post("/auth/login", {
+                email: email.trim(),
+                password,
+            });
+            if (data.access_token) {
+                localStorage.setItem("token", data.access_token);
+                localStorage.setItem("isLoggedIn", "true");
+                window.dispatchEvent(new Event("loginChange"));
+                navigate("/dashboard");
+            } else {
+                setSubmitError("Login successful but no token received. Please try again.");
+            }
+        } catch (err) {
+            const msg = err.response?.data?.error || err.message || "Login failed. Please try again.";
+            setSubmitError(msg);
+        } finally {
+            setLoading(false);
         }
-    }
+    };
 
     
 
@@ -57,6 +63,9 @@ function Login() {
                 <div className=" bg-brown-200 w-85 rounded-2xl p-5 py-10 lg:w-180 lg:p-20">
                     <h3 className="text-center text-[#F2B68C]">Admin Login</h3>
                     <h1 className="text-3xl font-semibold text-center pb-5">Login</h1>
+                    {submitError && (
+                        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{submitError}</p>
+                    )}
                     <form onSubmit={handleLogin} noValidate>
                         <div className="flex flex-col gap-2">
                             <label htmlFor="email" className="text-sm font-medium text-brown-400 ">Email</label>
@@ -104,7 +113,10 @@ function Login() {
                             {errors.password && <p className="text-xs text-red-500">{errors.password}</p>}
                         </div>
                         <div className="flex justify-center">
-                            <button type="submit" className="w-30 bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 mt-6">Log in</button>
+                            <button type="submit" disabled={loading} className="w-30 bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 mt-6 disabled:opacity-60 flex items-center justify-center gap-2">
+                                {loading ? <Loader2 className="animate-spin" size={18} /> : null}
+                                {loading ? "Logging in..." : "Log in"}
+                            </button>
                         </div>
                     </form>
                     
@@ -116,4 +128,4 @@ function Login() {
     );
 }
 
-export default Login;
+export default AdminLogin;

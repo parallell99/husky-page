@@ -25,12 +25,12 @@ import {
   X,
 } from "lucide-react";
 import axios from "axios";
-import { blogPosts as fallbackPosts } from "@/data/blogPost";
-import { getArticles, deleteArticle } from "@/utils/articleStorage";
+import { API_BASE_URL, apiClient } from "@/api/client";
 
 function Dashboard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [accessAllowed, setAccessAllowed] = useState(null); // null = กำลังเช็ค, true = admin, false = ไม่ใช่ admin
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -41,35 +41,47 @@ function Dashboard() {
   const [toastMessage, setToastMessage] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
-  // Map fallback posts to articles format
-  const getFallbackArticles = () => {
-    return fallbackPosts.map((post, index) => ({
-      id: post.id,
-      title: post.title,
-      category: post.category,
-      status: index % 3 === 0 ? "Draft" : "Published", // Mix of Draft and Published
-    }));
+  // อนุญาตเฉพาะ role admin เท่านั้น
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/admin-login", { replace: true });
+      return;
+    }
+    apiClient
+      .get("/auth/get-user")
+      .then((res) => {
+        const role = res.data?.role || "";
+        if (role !== "admin") {
+          setAccessAllowed(false);
+          navigate("/", { replace: true });
+        } else {
+          setAccessAllowed(true);
+        }
+      })
+      .catch(() => {
+        setAccessAllowed(false);
+        navigate("/admin-login", { replace: true });
+      });
+  }, [navigate]);
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  // Load articles from storage and merge with fallback
-  const loadArticles = () => {
-    const storedArticles = getArticles();
-    const fallbackArticles = getFallbackArticles();
-    
-    // Merge stored articles with fallback, prioritizing stored
-    const storedIds = new Set(storedArticles.map((a) => a.id));
-    const merged = [...storedArticles, ...fallbackArticles.filter((a) => !storedIds.has(a.id))];
-    
-    return merged;
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("isLoggedIn");
+    window.dispatchEvent(new Event("loginChange"));
+    navigate("/");
   };
 
-  // Check for toast notification from URL params and refresh articles
+  // Check for toast notification from URL params and refresh articles from API
   useEffect(() => {
     const toast = searchParams.get("toast");
     if (toast) {
-      // Refresh articles list whenever toast appears
-      setArticles(loadArticles());
-      
+      fetchArticles(false);
       if (toast === "draft") {
         setToastMessage("Create article and saved as draft. You can publish article later.");
         setShowToast(true);
@@ -91,76 +103,38 @@ function Dashboard() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Fetch articles from API (background fetch)
+  // Fetch articles from API (ข้อมูลจริงจาก backend)
   const fetchArticles = async (showError = false) => {
     try {
       setLoading(true);
-      if (showError) {
-        setError(null);
-      }
-      
-      // Try different possible endpoints with shorter timeout
-      const endpoints = [
-        "https://blog-post-project-api.vercel.app",
-        "https://blog-post-project-api.vercel.app/posts",
-        "https://blog-post-project-api.vercel.app/articles",
-      ];
+      if (showError) setError(null);
 
-      let response = null;
-      let lastError = null;
+      const endpoint = `${API_BASE_URL}/posts`;
+      const response = await axios.get(endpoint, {
+        params: { limit: 100, page: 1 },
+        timeout: 5000,
+        headers: getAuthHeaders(),
+      });
 
-      // Try each endpoint until one works
-      for (const endpoint of endpoints) {
-        try {
-          response = await axios.get(endpoint, {
-            timeout: 3000, // Reduced timeout to 3 seconds for faster loading
-          });
-          console.log(`Success fetching from ${endpoint}:`, response.data);
-          break;
-        } catch (err) {
-          lastError = err;
-          console.log(`Failed to fetch from ${endpoint}:`, err.message);
-          continue;
-        }
-      }
-
-      if (!response) {
-        throw lastError || new Error("All endpoints failed");
-      }
-
-      // Handle different response formats
       let articlesData = [];
-      if (response.data) {
-        if (Array.isArray(response.data)) {
-          articlesData = response.data;
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          articlesData = response.data.data;
-        } else if (response.data.posts && Array.isArray(response.data.posts)) {
-          articlesData = response.data.posts;
-        } else if (response.data.articles && Array.isArray(response.data.articles)) {
-          articlesData = response.data.articles;
-        } else if (response.data.results && Array.isArray(response.data.results)) {
-          articlesData = response.data.results;
-        } else {
-          const values = Object.values(response.data);
-          if (values.length > 0 && Array.isArray(values[0])) {
-            articlesData = values[0];
-          }
-        }
+      if (response.data?.posts && Array.isArray(response.data.posts)) {
+        articlesData = response.data.posts;
+      } else if (Array.isArray(response.data)) {
+        articlesData = response.data;
+      } else if (response.data?.data && Array.isArray(response.data.data)) {
+        articlesData = response.data.data;
       }
 
-      // Map API response to our expected format
-      const mappedArticles = articlesData.map((article, index) => ({
-        id: article.id || index + 1,
-        title: article.title || article.name || "Untitled",
-        category: article.category || "Uncategorized",
-        status: article.status || "Published",
+      const statusLabels = { 1: "Draft", 2: "Published" };
+      const mappedArticles = articlesData.map((item, index) => ({
+        id: item.id ?? index + 1,
+        title: item.title || item.name || "Untitled",
+        category: item.category_name ?? item.category ?? "Uncategorized",
+        status: item.status ?? statusLabels[item.status_id] ?? "Published",
       }));
-        
-      if (mappedArticles.length > 0) {
-        setArticles(mappedArticles);
-        setError(null); // Clear error if API succeeds
-      }
+
+      setArticles(mappedArticles);
+      setError(null);
     } catch (err) {
       console.error("Error fetching articles:", err);
       // Only show error if explicitly requested (e.g., on retry)
@@ -186,12 +160,8 @@ function Dashboard() {
     }
   };
 
-  // Load articles on mount
+  // โหลดบทความจาก API ตอนเปิดหน้า
   useEffect(() => {
-    // Set articles from storage/fallback immediately for instant display
-    setArticles(loadArticles());
-    
-    // Fetch from API in background (silently, without showing error)
     fetchArticles(false);
   }, []);
 
@@ -223,11 +193,23 @@ function Dashboard() {
     setDeleteConfirmId(articleId);
   };
 
-  const handleDeleteConfirm = () => {
-    if (deleteConfirmId) {
-      deleteArticle(deleteConfirmId);
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmId) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/posts/${deleteConfirmId}`, {
+        headers: getAuthHeaders(),
+        timeout: 5000,
+      });
       setDeleteConfirmId(null);
-      navigate("/dashboard?toast=deleted");
+      setArticles((prev) => prev.filter((a) => a.id !== deleteConfirmId));
+      setToastMessage("Article deleted successfully.");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 5000);
+    } catch (err) {
+      console.error("Delete article failed:", err);
+      const msg = err.response?.data?.message || err.message || "Failed to delete article.";
+      setError(msg);
+      setDeleteConfirmId(null);
     }
   };
 
@@ -264,12 +246,27 @@ function Dashboard() {
     { icon: LogOut, label: "Logout", active: false, path: "/dashboard" },
   ];
 
+  // กำลังเช็ค role หรือไม่ใช่ admin → แสดง loading หรือไม่แสดงเนื้อหา (จะ redirect)
+  if (accessAllowed !== true) {
+    return (
+      <div className="flex h-screen bg-brown-100 font-poppins items-center justify-center">
+        <p className="text-brown-600">กำลังตรวจสอบสิทธิ์...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-brown-100 font-poppins">
       {/* Left Sidebar */}
       <aside className="w-64 bg-white border-r border-brown-300 flex flex-col shadow-sm">
-        {/* Logo */}
-        <div className="p-6 border-b border-brown-300 bg-brown-200">
+        {/* Logo - คลิกไปหน้า Home */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate("/")}
+          onKeyDown={(e) => e.key === "Enter" && navigate("/")}
+          className="p-6 border-b border-brown-300 bg-brown-200 cursor-pointer hover:opacity-90"
+        >
           <div className="flex items-center gap-2 mb-2">
             <span className="text-2xl font-semibold text-brown-600">hh</span>
             <span className="text-2xl font-semibold text-green">.</span>
@@ -285,7 +282,7 @@ function Dashboard() {
               return (
                 <button
                   key={index}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"
@@ -306,7 +303,7 @@ function Dashboard() {
               return (
                 <button
                   key={index + 5}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => (item.label === "Logout" ? handleLogout() : navigate(item.path))}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     item.active
                       ? "bg-brown-300 text-brown-600"

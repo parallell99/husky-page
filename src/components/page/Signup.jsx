@@ -1,9 +1,12 @@
 import Navbar from "../Navbar";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import success from "../../assets/image/Frame_427321234.svg";
 import { Eye, EyeOff } from "lucide-react";
+import { apiClient } from "@/api/client";
+
 function Signup() {
+    const navigate = useNavigate();
     const [name, setName] = useState("");
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
@@ -16,13 +19,16 @@ function Signup() {
         password: ""
     });
     const [signupSuccess, setSignupSuccess] = useState(false);
+    const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [submitError, setSubmitError] = useState("");
 
     const validateEmail = (email) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
     };
 
-    const handleSignup = (e) => {
+    const handleSignup = async (e) => {
         e.preventDefault();
 
         const newErrors = {
@@ -59,12 +65,54 @@ function Signup() {
         }
 
         setErrors(newErrors);
+        setSubmitError("");
 
-        // If no errors, proceed with signup
         if (!newErrors.name && !newErrors.username && !newErrors.email && !newErrors.password) {
-            console.log(name, username, email, password);
-            // Here you would typically send the data to your backend
-            setSignupSuccess(true);
+            setLoading(true);
+            try {
+                console.log("Attempting to register:", { email: email.trim(), username: username.trim() });
+                const { data } = await apiClient.post("/auth/register", {
+                    name: name.trim(),
+                    username: username.trim(),
+                    email: email.trim(),
+                    password,
+                });
+                console.log("Registration successful:", data);
+                
+                // ถ้ามี access_token (email confirmation ปิด) ให้ login อัตโนมัติ
+                if (data.access_token) {
+                    localStorage.setItem("token", data.access_token);
+                    localStorage.setItem("isLoggedIn", "true");
+                    window.dispatchEvent(new Event("loginChange"));
+                    console.log("Auto-logged in after registration");
+                }
+                
+                setSignupSuccess(true);
+                setEmailConfirmationRequired(data?.emailConfirmationRequired === true);
+            } catch (err) {
+                // console.error("Registration error:", err);
+                // console.error("Error response:", err.response);
+                // console.error("Error data:", err.response?.data);
+                // console.error("Error message from server:", err.response?.data?.error);
+                
+                let message = "Registration failed. Please try again.";
+                if (err.response?.data?.error) {
+                    const errorText = err.response.data.error.toLowerCase();
+                    if (errorText.includes("rate limit") || errorText.includes("rate_limit")) {
+                        message = "Too many signup attempts. Please wait 30-60 minutes before trying again, or use a different email address.";
+                    } else {
+                        message = err.response.data.error;
+                    }
+                } else if (err.response?.status === 0 || err.code === "ERR_NETWORK" || err.message?.includes("Network Error")) {
+                    message = "Cannot connect to server. Please check if the server is running and try again.";
+                } else if (err.message) {
+                    message = err.message;
+                }
+                console.error("Final error message to display:", message);
+                setSubmitError(message);
+            } finally {
+                setLoading(false);
+            }
         }
     }
 
@@ -76,9 +124,21 @@ function Signup() {
 
                     <div className=" bg-brown-200 w-85 rounded-2xl p-5 py-10 flex justify-center items-center gap-5 flex-col lg:w-180 lg:p-20">
                         <img src={success} alt="success" className="w-20 h-20" />
-                        <p className="text-xl font-semibold text-center pb-5">Registration success</p>
+                        <p className="text-xl font-semibold text-center pb-2">Registration success</p>
+                        {emailConfirmationRequired && (
+                            <p className="text-sm text-brown-600 text-center pb-4">Please check your email to confirm your account, then you can log in.</p>
+                        )}
                         <div className="flex justify-center">
-                            <Link to="/" className="w-30 bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 px-6 flex items-center justify-center">Continue</Link>
+                            <button
+                                onClick={() => {
+                                    // Trigger event เพื่อให้ Navbar อัปเดตข้อมูล user
+                                    window.dispatchEvent(new Event("loginChange"));
+                                    navigate("/");
+                                }}
+                                className="w-30 bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 px-6 flex items-center justify-center hover:bg-brown-700 transition-colors"
+                            >
+                                Continue
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -168,8 +228,17 @@ function Signup() {
                                 {errors.password && <p className="text-xs text-red-500">{errors.password}</p>}
                             </div>
 
+                            {submitError && (
+                                <p className="text-xs text-red-500 text-center mt-4">{submitError}</p>
+                            )}
                             <div className="flex justify-center">
-                                <button type="submit" className="w-30 bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 mt-6">Sign up</button>
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-30 bg-brown-600 rounded-3xl text-white text-sm font-medium py-2 mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {loading ? "Signing up..." : "Sign up"}
+                                </button>
                             </div>
                             <p className="text-xs text-center pt-5">
                                 Already have an account? <Link to="/login" className="text-brown-500 underline text-xs font-semibold">Login</Link>
