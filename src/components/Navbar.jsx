@@ -89,7 +89,38 @@ function Navbar() {
     setNotifications(loadNotifications());
   }, []);
 
-  // Listen for notification updates
+  // ดึงแจ้งเตือนจาก API (ใช้ทั้งตอน login และเมื่อมีกิจกรรมใหม่ เช่น like)
+  const fetchNotificationsFromApi = () => {
+    apiClient.get("/notifications", { timeout: 10000 }).then((res) => {
+      const raw = Array.isArray(res.data) ? res.data : res.data?.data || res.data?.notifications || [];
+      const mapped = raw.map((n, i) => {
+        const created = n.created_at ?? n.createdAt ?? n.date;
+        const createdMs = created ? new Date(created).getTime() : 0;
+        const hoursAgo = createdMs ? Math.max(0, Math.floor((Date.now() - createdMs) / (1000 * 60 * 60))) : 0;
+        const nameFromUsers = n.actor_name ?? n.name ?? null;
+        return {
+          id: n.id ?? i + 1,
+          type: n.type,
+          text: n.text ?? n.message ?? "",
+          postId: n.post_id ?? n.postId,
+          post_id: n.post_id ?? n.postId,
+          hoursAgo,
+          created_at: created,
+          name: nameFromUsers,
+          actor_name: nameFromUsers,
+        };
+      });
+      setNotifications(mapped);
+      if (mapped.length > 0) localStorage.setItem("notifications", JSON.stringify(mapped));
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    fetchNotificationsFromApi();
+  }, [isLoggedIn]);
+
+  // Listen for notification updates (storage, อ่านแล้ว, หรือมีแจ้งเตือนใหม่ เช่น หลัง like)
   useEffect(() => {
     const handleStorageChange = (e) => {
       if (e.key === "notifications") {
@@ -102,17 +133,22 @@ function Navbar() {
     const handleNotificationRead = () => {
       setNotificationsReadAt(localStorage.getItem("notifications_read_at"));
     };
+    const handleNotificationsRefresh = () => {
+      if (isLoggedIn) fetchNotificationsFromApi();
+    };
 
     window.addEventListener("storage", handleStorageChange);
     window.addEventListener("notificationUpdate", handleNotificationUpdate);
     window.addEventListener("notificationRead", handleNotificationRead);
+    window.addEventListener("notificationsRefresh", handleNotificationsRefresh);
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("notificationUpdate", handleNotificationUpdate);
       window.removeEventListener("notificationRead", handleNotificationRead);
+      window.removeEventListener("notificationsRefresh", handleNotificationsRefresh);
     };
-  }, []);
+  }, [isLoggedIn]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -259,6 +295,41 @@ function Navbar() {
     }
   };
 
+  // แสดงแบบ "ชื่อ" (ตัวหนา) แล้วต่อด้วยกิจกรรม — รองรับทั้งรูปแบบใหม่และข้อความเก่าใน DB
+  const renderNotificationText = (notificationOrText) => {
+    const isObj = notificationOrText && typeof notificationOrText === "object";
+    const text = (isObj ? notificationOrText?.text : notificationOrText) || "";
+    const nameFromApi = isObj ? (notificationOrText?.actor_name ?? notificationOrText?.name) : null;
+    let namePart = nameFromApi;
+    let actionPart = text.trim();
+    if (!namePart && text) {
+      const dotSpace = ". ";
+      const idx = text.indexOf(dotSpace);
+      if (idx > 0) {
+        namePart = text.slice(0, idx);
+        actionPart = text.slice(idx + dotSpace.length);
+      } else if (text.includes("มีคนคอมเม้นในบทความ")) {
+        namePart = "Someone";
+        actionPart = text.replace(/^มีคนคอมเม้นในบทความ\s*/, "commented on the article ");
+      } else if (text.includes("มีบทความใหม่")) {
+        namePart = "Admin";
+        actionPart = text.replace(/^มีบทความใหม่\s*:?\s*/, "Published new article: ").trim() || "Published new article.";
+      } else if (text.includes("มีคนกด like")) {
+        namePart = "Someone";
+        actionPart = text.replace(/^มีคนกด like\s*/, "liked the article ");
+      }
+    }
+    if (namePart) {
+      return (
+        <span>
+          <span className="font-semibold text-brown-800">{namePart}</span>
+          {actionPart ? <> {" "}{actionPart}</> : null}
+        </span>
+      );
+    }
+    return text || "—";
+  };
+
   const handleNotificationClick = (notification) => {
     setShowNotificationDropdown(false);
     setIsOpen(false);
@@ -283,35 +354,20 @@ function Navbar() {
         {/* Desktop Menu - Conditional Rendering */}
         {isLoggedIn ? (
           <div className="hidden lg:flex gap-4 items-center">
-            {/* Notification - Admin ลิงก์ไปหน้าแจ้งเตือน */}
+            {/* Notification - ทั้ง admin และ user โชว์ dropdown + คลิกรายการลิงก์ไป post/:id */}
             <div className="relative" ref={notificationDropdownRef}>
-              {userProfile?.role === "admin" ? (
-                <Link
-                  to="/dashboard/notification"
-                  className="relative inline-flex p-2 text-brown-600 hover:text-brown-800 transition-colors"
-                >
-                  <Bell size={20} />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
-                      {getNotificationCountDisplay()}
-                    </span>
-                  )}
-                </Link>
-              ) : (
-                <>
-                  <button
-                    onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
-                    className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors"
-                  >
-                    <Bell size={20} />
-                    {unreadCount > 0 && (
-                      <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
-                        {getNotificationCountDisplay()}
-                      </span>
-                    )}
-                  </button>
-                  {/* Notification Dropdown (สำหรับ non-admin) */}
-                  {showNotificationDropdown && (
+              <button
+                onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors"
+              >
+                <Bell size={20} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
+                    {getNotificationCountDisplay()}
+                  </span>
+                )}
+              </button>
+              {showNotificationDropdown && (
                 <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
                   {notificationsToShow.length === 0 ? (
                     <div className="px-4 py-6 text-center">
@@ -319,43 +375,52 @@ function Navbar() {
                     </div>
                   ) : (
                     <div className="divide-y divide-brown-200">
-                      {notificationsToShow.map((notification) => (
-                        <button
-                          key={notification.id}
-                          onClick={() => handleNotificationClick(notification)}
-                          className="w-full text-left px-4 py-3 hover:bg-brown-50 transition-colors flex items-start gap-3"
-                        >
-                          {/* Avatar */}
-                          <div className="shrink-0">
-                            {notification.avatar ? (
-                              <img
-                                src={notification.avatar}
-                                alt="User"
-                                className="w-10 h-10 rounded-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
-                                <User className="w-6 h-6 text-brown-400" />
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Notification Content */}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-brown-600">
-                              {notification.text}
-                            </p>
-                            <p className="text-xs text-orange mt-1">
-                              {getRelativeTime(notification.hoursAgo)}
-                            </p>
-                          </div>
-                        </button>
-                      ))}
+                      {notificationsToShow.map((notification) => {
+                        const postId = notification.postId ?? notification.post_id;
+                        const to = postId ? `/post/${postId}#comments` : "/dashboard/notification";
+                        return (
+                          <Link
+                            key={notification.id}
+                            to={to}
+                            onClick={() => setShowNotificationDropdown(false)}
+                            className="w-full text-left px-4 py-3 hover:bg-brown-50 transition-colors flex items-start gap-3"
+                          >
+                            <div className="shrink-0">
+                              {notification.avatar ? (
+                                <img
+                                  src={notification.avatar}
+                                  alt="User"
+                                  className="w-10 h-10 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
+                                  <User className="w-6 h-6 text-brown-400" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-brown-600">{renderNotificationText(notification)}</p>
+                              <p className="text-xs text-orange mt-1">
+                                {getRelativeTime(notification.hoursAgo)}
+                              </p>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {userProfile?.role === "admin" && (
+                    <div className="border-t border-brown-200 p-2">
+                      <Link
+                        to="/dashboard/notification"
+                        onClick={() => setShowNotificationDropdown(false)}
+                        className="block text-center text-sm font-medium text-brown-600 hover:text-brown-800 py-2"
+                      >
+                        ดูทั้งหมด
+                      </Link>
                     </div>
                   )}
                 </div>
-              )}
-                </>
               )}
             </div>
 
@@ -450,32 +515,18 @@ function Navbar() {
           {/* Notification Icon - Mobile */}
           {isLoggedIn && (
             <div className="relative" ref={notificationDropdownRef}>
-              {userProfile?.role === "admin" ? (
-                <Link
-                  to="/dashboard/notification"
-                  className="relative inline-flex p-2 text-brown-600 hover:text-brown-800 transition-colors"
-                >
-                  <Bell size={18} />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-0 right-0 min-w-[16px] h-[16px] bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center px-0.5">
-                      {getNotificationCountDisplay()}
-                    </span>
-                  )}
-                </Link>
-              ) : (
-                <>
-                  <button
-                    onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
-                    className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors"
-                  >
-                    <Bell size={18} />
-                    {unreadCount > 0 && (
-                      <span className="absolute top-0 right-0 min-w-[16px] h-[16px] bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center px-0.5">
-                        {getNotificationCountDisplay()}
-                      </span>
-                    )}
-                  </button>
-                  {showNotificationDropdown && (
+              <button
+                onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors"
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-0 right-0 min-w-[16px] h-[16px] bg-red-500 text-white text-[10px] font-semibold rounded-full flex items-center justify-center px-0.5">
+                    {getNotificationCountDisplay()}
+                  </span>
+                )}
+              </button>
+              {showNotificationDropdown && (
                 <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
                   {notificationsToShow.length === 0 ? (
                     <div className="px-4 py-6 text-center">
@@ -483,43 +534,52 @@ function Navbar() {
                     </div>
                   ) : (
                     <div className="divide-y divide-brown-200">
-                      {notificationsToShow.map((notification) => (
-                        <button
-                          key={notification.id}
-                          onClick={() => handleNotificationClick(notification)}
-                          className="w-full text-left px-4 py-3 hover:bg-brown-50 transition-colors flex items-start gap-3"
-                        >
-                          {/* Avatar */}
-                          <div className="shrink-0">
-                            {notification.avatar ? (
-                              <img
-                                src={notification.avatar}
-                                alt="User"
-                                className="w-10 h-10 rounded-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
-                                <User className="w-6 h-6 text-brown-400" />
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Notification Content */}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-brown-600">
-                              {notification.text}
-                            </p>
-                            <p className="text-xs text-orange mt-1">
-                              {getRelativeTime(notification.hoursAgo)}
-                            </p>
-                          </div>
-                        </button>
-                      ))}
+                      {notificationsToShow.map((notification) => {
+                        const postId = notification.postId ?? notification.post_id;
+                        const to = postId ? `/post/${postId}#comments` : "/dashboard/notification";
+                        return (
+                          <Link
+                            key={notification.id}
+                            to={to}
+                            onClick={() => setShowNotificationDropdown(false)}
+                            className="w-full text-left px-4 py-3 hover:bg-brown-50 transition-colors flex items-start gap-3"
+                          >
+                            <div className="shrink-0">
+                              {notification.avatar ? (
+                                <img
+                                  src={notification.avatar}
+                                  alt="User"
+                                  className="w-10 h-10 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
+                                  <User className="w-6 h-6 text-brown-400" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-brown-600">{renderNotificationText(notification)}</p>
+                              <p className="text-xs text-orange mt-1">
+                                {getRelativeTime(notification.hoursAgo)}
+                              </p>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {userProfile?.role === "admin" && (
+                    <div className="border-t border-brown-200 p-2">
+                      <Link
+                        to="/dashboard/notification"
+                        onClick={() => setShowNotificationDropdown(false)}
+                        className="block text-center text-sm font-medium text-brown-600 hover:text-brown-800 py-2"
+                      >
+                        ดูทั้งหมด
+                      </Link>
                     </div>
                   )}
                 </div>
-              )}
-                </>
               )}
             </div>
           )}
@@ -567,35 +627,20 @@ function Navbar() {
                         </p>
                       </div>
                       
-                      {/* Notification Bell */}
+                      {/* Notification Bell - โชว์ dropdown ทั้ง admin/user คลิกลิงก์ไป post/:id */}
                       <div className="relative" ref={notificationDropdownRef}>
-                        {userProfile?.role === "admin" ? (
-                          <Link
-                            to="/dashboard/notification"
-                            onClick={() => setIsOpen(false)}
-                            className="relative inline-flex p-2 text-brown-600 hover:text-brown-800 transition-colors"
-                          >
-                            <Bell size={20} />
-                            {unreadCount > 0 && (
-                              <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
-                                {getNotificationCountDisplay()}
-                              </span>
-                            )}
-                          </Link>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
-                              className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors"
-                            >
-                              <Bell size={20} />
-                              {unreadCount > 0 && (
-                                <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
-                                  {getNotificationCountDisplay()}
-                                </span>
-                              )}
-                            </button>
-                            {showNotificationDropdown && (
+                        <button
+                          onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                          className="relative p-2 text-brown-600 hover:text-brown-800 transition-colors"
+                        >
+                          <Bell size={20} />
+                          {unreadCount > 0 && (
+                            <span className="absolute top-0 right-0 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-semibold rounded-full flex items-center justify-center px-1">
+                              {getNotificationCountDisplay()}
+                            </span>
+                          )}
+                        </button>
+                        {showNotificationDropdown && (
                           <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-brown-200 overflow-hidden z-50 max-h-[400px] overflow-y-auto">
                             {notificationsToShow.length === 0 ? (
                               <div className="px-4 py-6 text-center">
@@ -603,43 +648,52 @@ function Navbar() {
                               </div>
                             ) : (
                               <div className="divide-y divide-brown-200">
-                                {notificationsToShow.map((notification) => (
-                                  <button
-                                    key={notification.id}
-                                    onClick={() => handleNotificationClick(notification)}
-                                    className="w-full text-left px-4 py-3 hover:bg-brown-50 transition-colors flex items-start gap-3"
-                                  >
-                                    {/* Avatar */}
-                                    <div className="shrink-0">
-                                      {notification.avatar ? (
-                                        <img
-                                          src={notification.avatar}
-                                          alt="User"
-                                          className="w-10 h-10 rounded-full object-cover"
-                                        />
-                                      ) : (
-                                        <div className="w-10 h-10 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
-                                          <User className="w-6 h-6 text-brown-400" />
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* Notification Content */}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-brown-600">
-                                        {notification.text}
-                                      </p>
-                                      <p className="text-xs text-orange mt-1">
-                                        {getRelativeTime(notification.hoursAgo)}
-                                      </p>
-                                    </div>
-                                  </button>
-                                ))}
+                                {notificationsToShow.map((notification) => {
+                                  const postId = notification.postId ?? notification.post_id;
+                                  const to = postId ? `/post/${postId}#comments` : "/dashboard/notification";
+                                  return (
+                                    <Link
+                                      key={notification.id}
+                                      to={to}
+                                      onClick={() => { setShowNotificationDropdown(false); setIsOpen(false); }}
+                                      className="w-full text-left px-4 py-3 hover:bg-brown-50 transition-colors flex items-start gap-3"
+                                    >
+                                      <div className="shrink-0">
+                                        {notification.avatar ? (
+                                          <img
+                                            src={notification.avatar}
+                                            alt="User"
+                                            className="w-10 h-10 rounded-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className="w-10 h-10 rounded-full bg-brown-200 border border-brown-300 flex items-center justify-center">
+                                            <User className="w-6 h-6 text-brown-400" />
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-brown-600">{renderNotificationText(notification)}</p>
+                                        <p className="text-xs text-orange mt-1">
+                                          {getRelativeTime(notification.hoursAgo)}
+                                        </p>
+                                      </div>
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {userProfile?.role === "admin" && (
+                              <div className="border-t border-brown-200 p-2">
+                                <Link
+                                  to="/dashboard/notification"
+                                  onClick={() => { setShowNotificationDropdown(false); setIsOpen(false); }}
+                                  className="block text-center text-sm font-medium text-brown-600 hover:text-brown-800 py-2"
+                                >
+                                  ดูทั้งหมด
+                                </Link>
                               </div>
                             )}
                           </div>
-                        )}
-                            </>
                         )}
                       </div>
                     </div>

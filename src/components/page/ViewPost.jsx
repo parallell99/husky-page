@@ -207,8 +207,8 @@ function CardDetail() {
                             />
                         </div>
             
-            <div className="flex flex-col lg:grid lg:grid-cols-[1fr_280px] items-start w-full mt-10 lg:mt-20 px-4 lg:px-30 gap-6">
-                <div className=" rounded-2xl pb-5 lg:w-full">
+            <div className="flex flex-col lg:grid lg:grid-cols-[1fr_280px] items-start  mt-10 lg:mt-20 px-4 lg:px-30 gap-6">
+                <div className=" rounded-2xl pb-5  lg:w-full">
                     <div className="flex flex-col gap-6 ">
                         {/* Category and Date */}
                         <div className="flex items-center gap-3">
@@ -230,7 +230,7 @@ function CardDetail() {
 
                         {/* Content */}
                         {post.content && (
-                            <div className="prose max-w-none">
+                            <div className="prose mx-auto ">
                                 {formatContent(post.content)}
                             </div>
                         )}
@@ -280,6 +280,8 @@ function CardDetail() {
                             // Refresh like count
                             const likesResponse = await apiClient.get(`/posts/${id}/likes`);
                             setLikeCount(likesResponse.data.count || 0);
+                            // แจ้งให้ Navbar และหน้า Notification ดึงแจ้งเตือนใหม่ (รวม like ที่เพิ่งสร้าง)
+                            window.dispatchEvent(new Event("notificationsRefresh"));
                         } catch (err) {
                             if (err.response?.status === 401) {
                                 localStorage.removeItem("token");

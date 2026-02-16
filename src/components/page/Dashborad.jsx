@@ -25,11 +25,12 @@ import {
   X,
 } from "lucide-react";
 import axios from "axios";
-import { API_BASE_URL } from "@/api/client";
+import { API_BASE_URL, apiClient } from "@/api/client";
 
 function Dashboard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [accessAllowed, setAccessAllowed] = useState(null); // null = กำลังเช็ค, true = admin, false = ไม่ใช่ admin
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -39,6 +40,30 @@ function Dashboard() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+
+  // อนุญาตเฉพาะ role admin เท่านั้น
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/admin-login", { replace: true });
+      return;
+    }
+    apiClient
+      .get("/auth/get-user")
+      .then((res) => {
+        const role = res.data?.role || "";
+        if (role !== "admin") {
+          setAccessAllowed(false);
+          navigate("/", { replace: true });
+        } else {
+          setAccessAllowed(true);
+        }
+      })
+      .catch(() => {
+        setAccessAllowed(false);
+        navigate("/admin-login", { replace: true });
+      });
+  }, [navigate]);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem("token");
@@ -220,6 +245,15 @@ function Dashboard() {
     { icon: KeyRound, label: "Reset Password", active: false, path: "/dashboard/reset-password" },
     { icon: LogOut, label: "Logout", active: false, path: "/dashboard" },
   ];
+
+  // กำลังเช็ค role หรือไม่ใช่ admin → แสดง loading หรือไม่แสดงเนื้อหา (จะ redirect)
+  if (accessAllowed !== true) {
+    return (
+      <div className="flex h-screen bg-brown-100 font-poppins items-center justify-center">
+        <p className="text-brown-600">กำลังตรวจสอบสิทธิ์...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-brown-100 font-poppins">

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
-import { API_BASE_URL } from "@/api/client";
+import { apiClient } from "@/api/client";
 import {
   FileText,
   FolderOpen,
@@ -12,8 +11,8 @@ import {
   MessageCircle,
   Newspaper,
   Heart,
+  RefreshCw,
 } from "lucide-react";
-import { apiClient } from "@/api/client";
 
 const NOTIFICATION_TYPE = { NEW_ARTICLE: "new_article", COMMENT: "comment", LIKE: "like" };
 
@@ -86,11 +85,67 @@ function Notification() {
   };
 
   const getDefaultNotifications = () => [
-    { id: 1, type: NOTIFICATION_TYPE.NEW_ARTICLE, text: "มีบทความใหม่: The Art of Mindfulness", hoursAgo: 1, postId: 1 },
-    { id: 2, type: NOTIFICATION_TYPE.COMMENT, text: "มีคนคอมเม้นในบทความ 'The Art of Mindfulness'", hoursAgo: 2, postId: 1 },
-    { id: 3, type: NOTIFICATION_TYPE.NEW_ARTICLE, text: "มีบทความใหม่: Cat Nutrition Guide", hoursAgo: 5, postId: 2 },
-    { id: 4, type: NOTIFICATION_TYPE.COMMENT, text: "มีคนคอมเม้นในบทความ 'Cat Nutrition Guide'", hoursAgo: 8, postId: 2 },
+    { id: 1, type: NOTIFICATION_TYPE.NEW_ARTICLE, text: "Thompson P. Published new article.", hoursAgo: 1, postId: 1 },
+    { id: 2, type: NOTIFICATION_TYPE.COMMENT, text: "Jacob Lash. Comment on the article you have commented on.", hoursAgo: 2, postId: 1 },
+    { id: 3, type: NOTIFICATION_TYPE.NEW_ARTICLE, text: "Thompson P. Published new article.", hoursAgo: 5, postId: 2 },
+    { id: 4, type: NOTIFICATION_TYPE.COMMENT, text: "Jacob Lash. Comment on the article you have commented on.", hoursAgo: 8, postId: 2 },
   ];
+
+  // ดึงชื่อ user จริงจาก notification (รองรับหลายฟิลด์จาก API)
+  const getActorName = (notification) => {
+    return (
+      notification?.actor_name ??
+      notification?.name ??
+      notification?.user?.name ??
+      notification?.user?.username ??
+      notification?.username ??
+      null
+    );
+  };
+
+  // แสดงแบบ "ชื่อ" (ตัวหนา) แล้วต่อด้วย "กิจกรรมที่ทำ" — รองรับทั้งรูปแบบใหม่และข้อความเก่าใน DB
+  const renderNotificationText = (notification) => {
+    const text = (notification?.text || "").trim();
+    const nameFromApi = getActorName(notification);
+    let namePart = nameFromApi;
+    let actionPart = text;
+
+    if (!namePart && typeof text === "string") {
+      // รูปแบบใหม่: "Thompson P. Published new article." / "Jacob Lash. Comment on..."
+      const dotSpace = ". ";
+      const idx = text.indexOf(dotSpace);
+      if (idx > 0) {
+        namePart = text.slice(0, idx);
+        actionPart = text.slice(idx + dotSpace.length);
+      } else if (text.includes("มีคนคอมเม้นในบทความ")) {
+        // รูปแบบเก่า (แจ้งเตือนเก่าใน DB): ใช้ชื่อจริงจาก API ถ้ามี ไม่มีค่อยใช้ "Someone"
+        namePart = getActorName(notification) || "Someone";
+        actionPart = text.replace(/^มีคนคอมเม้นในบทความ\s*/, "commented on the article ");
+      } else if (text.includes("มีบทความใหม่")) {
+        // รูปแบบเก่า: "มีบทความใหม่: xxx"
+        namePart = getActorName(notification) || "Admin";
+        actionPart = text.replace(/^มีบทความใหม่\s*:?\s*/, "Published new article: ").trim() || "Published new article.";
+      } else if (text.includes("มีคนกด like")) {
+        namePart = getActorName(notification) || "Someone";
+        actionPart = text.replace(/^มีคนกด like\s*/, "liked the article ");
+      }
+    }
+
+    if (namePart) {
+      return (
+        <span>
+          <span className="font-semibold text-brown-800">{namePart}</span>
+          {actionPart ? (
+            <>
+              {" "}
+              {actionPart}
+            </>
+          ) : null}
+        </span>
+      );
+    }
+    return text || "—";
+  };
 
   const getNotificationTypeDisplay = (type) => {
     switch (type) {
@@ -157,9 +212,8 @@ function Notification() {
         setError(null);
       }
 
-      const endpoint = `${API_BASE_URL}/notifications`;
-      const response = await axios.get(endpoint, {
-        timeout: 3000,
+      const response = await apiClient.get("/notifications", {
+        timeout: 10000,
       });
 
       console.log("Success fetching notifications:", response.data);
@@ -209,6 +263,13 @@ function Notification() {
         // Extract post/article ID from various possible fields
         const postId = notification.postId ?? notification.post_id ?? notification.articleId ?? notification.article_id ?? notification.relatedPostId ?? notification.post?.id ?? notification.article?.id ?? null;
         const type = notification.type || notification.notification_type || null;
+        const nameFromUsers =
+          notification.actor_name ??
+          notification.name ??
+          notification.user?.name ??
+          notification.user?.username ??
+          notification.username ??
+          null;
 
         return {
           id: notification.id || index + 1,
@@ -218,6 +279,8 @@ function Notification() {
           hoursAgo,
           postId,
           created_at: timestamp || null,
+          name: nameFromUsers,
+          actor_name: nameFromUsers,
         };
       });
 
@@ -264,9 +327,33 @@ function Notification() {
   }, []);
 
   useEffect(() => {
-    setNotifications(loadNotifications());
+    const cached = loadNotifications();
+    setNotifications(cached);
+    // ดึงจาก API ทุกครั้งที่เปิดหน้า (ข้อมูลล่าสุด) แล้วแทนที่ cache
     fetchNotifications(false);
   }, []);
+
+  // ดึงข้อมูลใหม่เมื่อกลับมาเปิดแท็บ หรือเมื่อมีกิจกรรมใหม่ (เช่น มีคนกด like)
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchNotifications(false);
+      }
+    };
+    const onNotificationsRefresh = () => {
+      fetchNotifications(false);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("notificationsRefresh", onNotificationsRefresh);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("notificationsRefresh", onNotificationsRefresh);
+    };
+  }, []);
+
+  const handleRefresh = () => {
+    fetchNotifications(true);
+  };
 
   const handleView = (notification) => {
     const postId = notification.postId ?? notification.post_id;
@@ -343,11 +430,27 @@ function Notification() {
       <main className="flex-1 overflow-y-auto bg-brown-100">
         <div className="p-8 w-full mx-auto">
           {/* Header */}
-          <div className="mb-6">
+          <div className="mb-6 flex items-center justify-between gap-4">
             <h1 className="text-2xl font-semibold text-brown-600">
               Notifications
             </h1>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brown-200 text-brown-600 hover:bg-brown-300 font-medium text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              aria-label="ดึงข้อมูลใหม่"
+            >
+              <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+              {loading ? "กำลังโหลด..." : "ดึงข้อมูลใหม่"}
+            </button>
           </div>
+
+          {error && (
+            <div className="mb-4 px-4 py-2 rounded-lg bg-amber-100 text-amber-800 text-sm">
+              {error}
+            </div>
+          )}
 
           {/* Notification List */}
           <div className="bg-white rounded-xl shadow-sm border border-brown-300 overflow-hidden">
@@ -386,7 +489,9 @@ function Notification() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-brown-600">{notification.text}</p>
+                        <p className="text-sm font-medium text-brown-600">
+                          {renderNotificationText(notification)}
+                        </p>
                         <p className="text-xs text-orange mt-1">{getRelativeTime(notification.hoursAgo)}</p>
                       </div>
                       {hasPost && (
